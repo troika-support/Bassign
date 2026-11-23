@@ -1,0 +1,12 @@
+<MudItem xs="6" md="3">
+    <MudPaper Elevation="0" Class="pa-4 ba-metric" Style="border:1px solid var(--ba-line); border-radius:8px;">
+        <p class="ba-metric__label">@Label</p>
+        <p class="ba-metric__value @(Variant is "" ? "" : $"ba-metric__value--{Variant}")">@Value</p>
+    </MudPaper>
+</MudItem>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public int Value { get; set; }
+    [Parameter] public string Variant { get; set; } = "";
+}

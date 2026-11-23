@@ -1,6 +1,7 @@
 using Bassign.Application.Common.Auditing;
 using Bassign.Application.Common.Persistence;
 using Bassign.Application.Common.Security;
+using Bassign.Application.Common.Directory;
 using Bassign.Application.Identity;
 using Bassign.Application.Tasks;
 using Bassign.Infrastructure.Options;
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<RefreshTokenService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddSingleton(TimeProvider.System);
 
         return services;

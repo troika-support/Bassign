@@ -1,3 +1,24 @@
+@import url('css/tokens.css');
+@import url('css/motion.css');
+@import url('css/components.css');
+
 :root { color-scheme: light dark; }
-body { font-family: Inter, system-ui, "Segoe UI", sans-serif; margin: 0; }
-.page { max-width: 960px; margin: 0 auto; padding: 24px; }
+body { font-family: Inter, system-ui, "Segoe UI", sans-serif; margin: 0; background: var(--ba-bg); color: var(--ba-ink); }
+
+/* Manager content density (design-system §7). */
+.ba-content { padding: 24px; }
+.ba-page-title { font-size: 2rem; font-weight: 500; margin: 0 0 4px; }
+.ba-page-sub { color: var(--ba-muted); margin: 0 0 24px; }
+
+/* Metric cards + workload (design-system §6, §8.3). Tabular figures so numbers align. */
+.ba-metric { font-variant-numeric: tabular-nums; }
+.ba-metric__label { color: var(--ba-muted); font-size: .85rem; margin: 0; }
+.ba-metric__value { font-size: 1.5rem; font-weight: 500; margin: 2px 0 0; }
+.ba-metric__value--overdue { color: var(--ba-danger); }
+.ba-metric__value--duetoday { color: var(--ba-warning); }
+.ba-metric__value--ontime { color: var(--ba-success); }
+.ba-workload { display:flex; align-items:center; gap:16px; padding:12px 0; border-bottom:1px solid var(--ba-line); }
+.ba-workload__name { font-weight:500; }
+.ba-workload__meta { color: var(--ba-muted); font-size:.85rem; font-variant-numeric: tabular-nums; }
+.ba-bar { height:8px; border-radius:4px; background:var(--ba-surface); overflow:hidden; flex:1; min-width:80px; max-width:220px; }
+.ba-bar__fill { height:100%; background:var(--ba-accent); }

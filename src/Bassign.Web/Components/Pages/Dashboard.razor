@@ -1,0 +1,51 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Bassign.Application.Dashboard
+@inject Mediator.ISender Sender
+
+<PageTitle>Workload · Bassign</PageTitle>
+
+<h1 class="ba-page-title">Workload</h1>
+<p class="ba-page-sub">Bassign · today</p>
+
+@if (_vm is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Class="mb-6">
+        <MetricCard Label="Overdue" Value="@_vm.Metrics.Overdue" Variant="overdue" />
+        <MetricCard Label="Due today" Value="@_vm.Metrics.DueToday" Variant="duetoday" />
+        <MetricCard Label="Unassigned" Value="@_vm.Metrics.Unassigned" Variant="" />
+        <MetricCard Label="On time (30d)" Value="@_vm.Metrics.OnTime30d" Variant="ontime" />
+    </MudGrid>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Team workload</MudText>
+    @if (_vm.Workload.Count == 0)
+    {
+        <p class="ba-empty__hint">No tasks yet — assign your first one.</p>
+    }
+    else
+    {
+        var max = _vm.Workload.Max(w => w.Active);
+        @foreach (var row in _vm.Workload)
+        {
+            <div class="ba-workload">
+                <span class="ba-workload__name" style="min-width:160px;">@row.Name</span>
+                <div class="ba-bar"><div class="ba-bar__fill" style="width:@(Pct(row.Active, max))%"></div></div>
+                <span class="ba-workload__meta">@row.Active active · @row.Overdue overdue</span>
+            </div>
+        }
+    }
+}
+
+@code {
+    private DashboardVm? _vm;
+
+    protected override async Task OnInitializedAsync() =>
+        _vm = await Sender.Send(new GetDashboardQuery());
+
+    private static int Pct(int value, int max) => max <= 0 ? 0 : (int)Math.Round(100.0 * value / max);
+}

@@ -1,5 +1,40 @@
 @inherits LayoutComponentBase
 
-<main class="page">
-    @Body
-</main>
+<MudThemeProvider Theme="BassignTheme.Build()" IsDarkMode="false" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="0" Color="Color.Surface" Class="border-b">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="@(() => _drawerOpen = !_drawerOpen)" aria-label="Toggle navigation" />
+        <img src="logo.svg" alt="Bassign" height="24" style="margin-left:8px" />
+        <MudSpacer />
+        <AuthorizeView>
+            <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight">
+                <MudText Class="px-4 py-2" Typo="Typo.body2">@context.User.Identity?.Name</MudText>
+                <MudDivider />
+                <form method="post" action="/account/logout">
+                    <AntiforgeryToken />
+                    <MudButton ButtonType="ButtonType.Submit" FullWidth="true" Class="justify-start"
+                               StartIcon="@Icons.Material.Filled.Logout">Sign out</MudButton>
+                </form>
+            </MudMenu>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <div class="ba-content">
+            @Body
+        </div>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+}

@@ -1,0 +1,7 @@
+<!-- PLACEHOLDER wordmark. Replace with the client/product logo before launch;
+     do not treat this as a final brand mark. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 40" role="img" aria-label="Bassign">
+  <rect x="2" y="8" width="24" height="24" rx="7" fill="var(--ba-accent,#1D4ED8)"/>
+  <path d="M8 20 l4 4 l7 -9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="36" y="27" font-family="Inter, system-ui, sans-serif" font-size="19" font-weight="500" fill="var(--ba-ink,#16191D)">Bassign</text>
+</svg>
