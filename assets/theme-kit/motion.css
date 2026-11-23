@@ -1,0 +1,7 @@
+/* Motion is core to the UI (micro-interactions), but prefers-reduced-motion is a HARD
+   requirement (design-system §4): every transition/animation collapses to an instant change. */
+.ba-animate { transition: transform var(--ba-motion) ease, opacity var(--ba-motion) ease,
+                          background-color var(--ba-motion) ease; }
+@media (prefers-reduced-motion: reduce) {
+  *, .ba-animate { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

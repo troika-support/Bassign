@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Bassign.Domain/Bassign.Domain.csproj" />
+    <Project Path="src/Bassign.Application/Bassign.Application.csproj" />
+    <Project Path="src/Bassign.Infrastructure/Bassign.Infrastructure.csproj" />
+    <Project Path="src/Bassign.Api/Bassign.Api.csproj" />
+    <Project Path="src/Bassign.Web/Bassign.Web.csproj" />
+    <Project Path="src/Bassign.UI.Shared/Bassign.UI.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Bassign.UnitTests/Bassign.UnitTests.csproj" />
+    <Project Path="tests/Bassign.IntegrationTests/Bassign.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

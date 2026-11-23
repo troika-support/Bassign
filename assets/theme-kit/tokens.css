@@ -1,0 +1,39 @@
+/* Bassign design tokens — docs/design-system.md §2–§4. Script-verified AAA for text.
+   Used by the shared RCL field components and any raw CSS. MudBlazor reads the palette from
+   BassignTheme.cs; keep the two in sync. --ba-accent is set from the organization's brand settings at runtime. */
+:root {
+  --ba-accent:      #1D4ED8;
+  --ba-accent-tint: #EEF2FF;
+  --ba-bg:          #FFFFFF;
+  --ba-surface:     #F7F8FA;
+  --ba-ink:         #16191D;  /* AAA 17.6 */
+  --ba-secondary:   #44505E;  /* AAA 8.2  */
+  --ba-muted:       #4C5864;  /* AAA 7.3  */
+  --ba-line:        #E3E7EC;
+  --ba-success:     #0B7A3B;
+  --ba-warning:     #B0520A;
+  --ba-danger:      #C01B1B;
+  --ba-radius-field: 12px;
+  --ba-radius-dense: 8px;
+  --ba-motion: 120ms;
+}
+:root[data-theme="dark"], .ba-dark {
+  --ba-accent:      #7AA2FF;
+  --ba-accent-tint: #1B2740;
+  --ba-bg:          #15181C;
+  --ba-surface:     #1E232A;
+  --ba-ink:         #E7EAEE;  /* AAA 14.8 */
+  --ba-secondary:   #AEB6C0;  /* AAA 8.7  */
+  --ba-muted:       #9AA4B0;  /* AAA 7.1  */
+  --ba-line:        #2A313A;
+  --ba-success:     #56D08A;
+  --ba-warning:     #F0A24B;
+  --ba-danger:      #FF8585;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ba-accent:#7AA2FF; --ba-accent-tint:#1B2740; --ba-bg:#15181C; --ba-surface:#1E232A;
+    --ba-ink:#E7EAEE; --ba-secondary:#AEB6C0; --ba-muted:#9AA4B0; --ba-line:#2A313A;
+    --ba-success:#56D08A; --ba-warning:#F0A24B; --ba-danger:#FF8585;
+  }
+}

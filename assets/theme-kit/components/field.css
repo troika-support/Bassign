@@ -1,0 +1,22 @@
+/* Field component styles — uses tokens.css. Large touch targets (>=48px), calm, AAA text. */
+.ba-task { padding:20px; max-width:560px; margin:0 auto; color:var(--ba-ink); }
+.ba-task__head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.ba-task__title { font-size:1.5rem; font-weight:500; line-height:1.25; margin:0; }
+.ba-task__detail { color:var(--ba-ink); margin:14px 0 0; }
+.ba-task__due { color:var(--ba-warning); margin:8px 0 0; font-size:.95rem; }
+.ba-actions { display:flex; gap:12px; margin-top:28px; }
+.ba-btn { flex:1; min-height:52px; border-radius:var(--ba-radius-field); font-size:1.05rem;
+          font-weight:500; cursor:pointer; border:1px solid transparent; }
+.ba-btn--primary { background:var(--ba-accent); color:#fff; }
+.ba-btn--ghost { background:transparent; color:var(--ba-ink); border-color:var(--ba-line); }
+.ba-sync { display:inline-flex; align-items:center; font-size:.8rem; color:var(--ba-muted); white-space:nowrap; }
+.ba-empty { text-align:center; padding:64px 24px; color:var(--ba-muted); }
+.ba-empty__title { font-size:1.15rem; color:var(--ba-ink); font-weight:500; margin:0; }
+.ba-empty__hint { margin:6px 0 0; }
+/* status chip */
+.ba-chip { display:inline-flex; align-items:center; gap:5px; font-size:.78rem; padding:3px 9px;
+           border-radius:var(--ba-radius-dense); background:var(--ba-surface); color:var(--ba-ink); }
+.ba-chip__icon { font-weight:500; }
+.ba-chip--done { background:#E6F4EC; color:var(--ba-success); }
+.ba-chip--overdue { background:#FBEAEA; color:var(--ba-danger); }
+.ba-chip--inprogress { background:#FBF0E6; color:var(--ba-warning); }

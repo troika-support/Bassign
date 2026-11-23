@@ -1,0 +1,41 @@
+@* Signature field component (shared RCL): one task, big actions, quiet Pending badge.
+   Calm and single-focus — never the manager density. See design-system §8.11. *@
+@if (Task is null)
+{
+    <div class="ba-empty">
+        <p class="ba-empty__title">You're all caught up</p>
+        <p class="ba-empty__hint">New tasks will appear here.</p>
+    </div>
+}
+else
+{
+    <article class="ba-task">
+        <header class="ba-task__head">
+            <h1 class="ba-task__title">@Task.Title</h1>
+            @if (Task.Pending) { <span class="ba-sync">Pending</span> }
+        </header>
+        @if (!string.IsNullOrWhiteSpace(Task.Detail)) { <p class="ba-task__detail">@Task.Detail</p> }
+        @if (Task.Due is not null) { <p class="ba-task__due">Due @Task.Due</p> }
+        <div class="ba-actions">
+            @if (Task.Status == "Todo")
+            {
+                <button class="ba-btn ba-btn--primary ba-animate" @onclick="OnAccept">Accept</button>
+                <button class="ba-btn ba-btn--ghost ba-animate" @onclick="OnDecline">Decline</button>
+            }
+            else if (Task.Status == "Accepted")
+            {
+                <button class="ba-btn ba-btn--primary ba-animate" @onclick="OnComplete">Mark done</button>
+                <button class="ba-btn ba-btn--ghost ba-animate" @onclick="OnAddPhoto">Add photo</button>
+            }
+        </div>
+    </article>
+}
+
+@code {
+    public record FieldTask(string Title, string? Detail, string? Due, string Status, bool Pending);
+    [Parameter] public FieldTask? Task { get; set; }
+    [Parameter] public EventCallback OnAccept { get; set; }
+    [Parameter] public EventCallback OnDecline { get; set; }
+    [Parameter] public EventCallback OnComplete { get; set; }
+    [Parameter] public EventCallback OnAddPhoto { get; set; }
+}

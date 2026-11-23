@@ -1,0 +1,39 @@
+## .NET / Visual Studio
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+build/
+publish/
+*.user
+*.suo
+*.userprefs
+.vs/
+_ReSharper*/
+*.rsuser
+
+## Secrets — never commit (kit rule: user-secrets in dev, env vars in prod)
+secrets.json
+appsettings.*.Local.json
+*.pfx
+*.p12
+
+## MAUI / mobile
+*.binlog
+*.aab
+*.apk
+*.ipa
+*.keystore
+*.jks
+
+## Test / coverage
+[Tt]est[Rr]esult*/
+*.trx
+coverage*/
+*.coverage
+
+## Rider / VS Code (optional)
+.idea/

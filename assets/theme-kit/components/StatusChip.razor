@@ -1,0 +1,14 @@
+@* Signature component: status as word + icon + colour — never colour alone (design-system §5). *@
+<span class="ba-chip ba-chip--@Key" role="status">
+    <span class="ba-chip__icon" aria-hidden="true">@Icon</span>@Label
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Status { get; set; } = "Todo";
+    string Key => Status.ToLowerInvariant().Replace(" ", "");
+    string Label => Status switch { "InProgress" => "In progress", _ => Status };
+    string Icon => Status switch
+    {
+        "Done" => "✓", "Overdue" => "!", "InProgress" => "•", "Pending" => "•", _ => "○"
+    };
+}

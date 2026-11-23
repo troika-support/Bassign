@@ -1,0 +1,26 @@
+root = true
+
+[*]
+indent_style = space
+end_of_line = crlf
+insert_final_newline = true
+charset = utf-8
+
+[*.{cs,razor}]
+indent_size = 4
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:suggestion
+dotnet_sort_system_directives_first = true
+dotnet_style_qualification_for_field = false:suggestion
+csharp_using_directive_placement = outside_namespace:suggestion
+
+[*.{csproj,props,targets,slnx}]
+indent_size = 2
+
+[*.{json,css,js}]
+indent_size = 2
+
+# EF Core migrations are generated code — don't enforce our style rules on them.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.IDE0161.severity = none

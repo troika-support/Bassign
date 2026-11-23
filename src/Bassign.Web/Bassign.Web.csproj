@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Bassign.Application\Bassign.Application.csproj" />
+    <ProjectReference Include="..\Bassign.Infrastructure\Bassign.Infrastructure.csproj" />
+    <ProjectReference Include="..\Bassign.UI.Shared\Bassign.UI.Shared.csproj" />
+  </ItemGroup>
+</Project>
