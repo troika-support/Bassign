@@ -1,3 +1,5 @@
+using Bassign.Infrastructure.Jobs;
+using Hangfire;
 using System.Security.Claims;
 using Bassign.Application;
 using Bassign.Application.Common.Security;
@@ -29,6 +31,7 @@ builder.Host.UseSerilog((context, loggerConfig) =>
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddMudServices();
 builder.Services.AddApplication().AddInfrastructure(builder.Configuration);
+builder.Services.AddBassignJobs(builder.Configuration, processJobs: false);   // dashboard only; the API runs jobs
 builder.Services.AddScoped<UserContext>();
 builder.Services.AddScoped<ICurrentUser, WebCurrentUser>();   // overrides the HTTP-only default
 builder.Services.AddScoped<IUiSender, UiSender>();   // one DI scope (and DbContext) per UI operation
@@ -79,6 +82,16 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();   // fingerprinted, compressed, long-cached static files
+if (HangfireSetup.IsEnabled(app.Configuration))
+{
+    app.MapHangfireDashboard(HangfireSetup.DashboardPath, new DashboardOptions
+    {
+        Authorization = [new AdminOnlyDashboardFilter()],
+        DashboardTitle = "Bassign jobs",
+        AppPath = "/",
+        DisplayStorageConnectionString = false
+    });
+}
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.MapPost("/account/login", async (

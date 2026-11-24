@@ -2,6 +2,7 @@ using Bassign.Api;
 using Bassign.Application;
 using Bassign.Infrastructure;
 using Bassign.Infrastructure.Identity;
+using Bassign.Infrastructure.Jobs;
 using Bassign.Infrastructure.Options;
 using Bassign.Infrastructure.Persistence;
 using Bassign.Infrastructure.Persistence.Seed;
@@ -20,6 +21,7 @@ builder.Services
 
 builder.Services.AddBassignJwtAuth(builder.Configuration);
 builder.Services.AddBassignWorkers();   // notification sender + WhatsApp inbox — this host only
+builder.Services.AddBassignJobs(builder.Configuration, processJobs: true);   // Hangfire: reminders, escalations, digests
 
 // Options bound from config, validated at startup. Secrets never live in source:
 // the DB connection string comes from appsettings.Development.json (dev) or an env var (prod).

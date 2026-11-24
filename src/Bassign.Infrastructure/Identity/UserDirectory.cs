@@ -23,4 +23,19 @@ public sealed class UserDirectory(AppDbContext db) : IUserDirectory
             .OrderBy(u => u.DisplayName)
             .Select(u => new DirectoryUser(u.Id, u.DisplayName))
             .ToListAsync(cancellationToken);
+
+    public async Task<UserContact?> GetContactAsync(string userId, CancellationToken cancellationToken = default) =>
+        await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId && u.IsActive && u.Email != null)
+            .Select(u => new UserContact(u.Id, u.DisplayName, u.Email!))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<DirectoryUser>> ListActiveInRolesAsync(IReadOnlyCollection<string> roles, CancellationToken cancellationToken = default) =>
+        await (from u in db.Users.AsNoTracking()
+               join ur in db.UserRoles on u.Id equals ur.UserId
+               join r in db.Roles on ur.RoleId equals r.Id
+               where u.IsActive && r.Name != null && roles.Contains(r.Name)
+               select new DirectoryUser(u.Id, u.DisplayName))
+            .Distinct()
+            .ToListAsync(cancellationToken);
 }

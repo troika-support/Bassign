@@ -76,10 +76,45 @@ namespace Bassign.Infrastructure.Migrations
                         .HasMaxLength(7)
                         .HasColumnType("nvarchar(7)");
 
+                    b.Property<bool>("DigestEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("DigestHour")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(6);
+
+                    b.Property<int>("EscalateAfterMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(60);
+
+                    b.Property<int>("EscalationCooldownMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1440);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("QuietEndHour")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(6);
+
+                    b.Property<int>("QuietStartHour")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(20);
+
+                    b.Property<int>("ReminderLeadMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(120);
 
                     b.Property<DateTimeOffset?>("SetupCompletedAt")
                         .HasColumnType("datetimeoffset");
@@ -465,6 +500,10 @@ namespace Bassign.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -476,6 +515,9 @@ namespace Bassign.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("NextAttemptAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PayloadJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -492,7 +534,13 @@ namespace Bassign.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DedupeKey")
+                        .IsUnique()
+                        .HasFilter("[DedupeKey] IS NOT NULL");
+
                     b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("Kind", "TaskId", "CreatedAt");
 
                     b.ToTable("OutboundNotifications", (string)null);
                 });

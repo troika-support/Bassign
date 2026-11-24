@@ -66,5 +66,8 @@ public sealed class OutboundNotificationConfiguration : IEntityTypeConfiguration
         builder.Property(n => n.Channel).HasMaxLength(16);
         builder.Property(n => n.LastError).HasMaxLength(500);
         builder.HasIndex(n => new { n.Status, n.NextAttemptAt });
+        builder.Property(n => n.DedupeKey).HasMaxLength(200);
+        builder.HasIndex(n => n.DedupeKey).IsUnique().HasFilter("[DedupeKey] IS NOT NULL");
+        builder.HasIndex(n => new { n.Kind, n.TaskId, n.CreatedAt });
     }
 }

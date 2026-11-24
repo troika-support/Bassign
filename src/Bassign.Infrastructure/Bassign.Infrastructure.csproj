@@ -7,6 +7,11 @@
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
     <PackageReference Include="Anthropic" />
+    <PackageReference Include="Hangfire.Core" />
+    <PackageReference Include="Hangfire.SqlServer" />
+    <PackageReference Include="Hangfire.AspNetCore" />
+    <!-- Hangfire.Core pulls Newtonsoft.Json 11 (GHSA-5crp-9r3c-p9vr); pin the patched version. -->
+    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <!-- Pin the patched crypto package (transitive via SqlClient) to clear NU1902/NU1903. -->

@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AuditBehavior<,>));
 
         services.AddScoped<ITaskAccess, TaskAccess>();
+        services.AddScoped<Notifications.NotificationMessageBuilder>();
 
         // Domain-event handlers (run inside the unit of work; they only record follow-up work).
         services.AddScoped<IDomainEventHandler<TaskAssigned>, NotifyAssigneeOnTaskAssigned>();

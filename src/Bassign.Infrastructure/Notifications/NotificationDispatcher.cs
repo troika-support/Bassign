@@ -1,4 +1,5 @@
 using Bassign.Application.Notifications;
+using Bassign.Domain.Organizations;
 using Bassign.Infrastructure.Persistence;
 using Bassign.Infrastructure.Persistence.Messaging;
 using Microsoft.EntityFrameworkCore;
@@ -8,11 +9,16 @@ using Microsoft.Extensions.Logging;
 
 namespace Bassign.Infrastructure.Notifications;
 
-/// <summary>One pass over the outbox: try each channel in order; retry transient failures with
+/// <summary>One pass over the outbox: respect quiet hours, build the message from CURRENT data (a finished
+/// task's reminder becomes a no-op), then try each channel in order; retry transient failures with
 /// exponential back-off (30s → 1h, 8 attempts). Saves after every notification so a crash never
 /// re-sends ones already delivered.</summary>
 public sealed class NotificationDispatcher(
-    AppDbContext db, IEnumerable<INotificationChannel> channels, TimeProvider clock, ILogger<NotificationDispatcher> logger)
+    AppDbContext db,
+    IEnumerable<INotificationChannel> channels,
+    NotificationMessageBuilder builder,
+    TimeProvider clock,
+    ILogger<NotificationDispatcher> logger)
 {
     private const int MaxAttempts = 8;
     private const int BatchSize = 20;
@@ -25,18 +31,38 @@ public sealed class NotificationDispatcher(
             .OrderBy(n => n.CreatedAt)
             .Take(BatchSize)
             .ToListAsync(cancellationToken);
+        if (due.Count == 0) return 0;
+
+        var org = await db.OrganizationSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken) ?? OrganizationSettings.CreateDefault();
+        var zone = NotificationSchedule.Zone(org.TimeZoneId);
+        var quiet = NotificationSchedule.IsQuiet(now, zone, org.QuietStartHour, org.QuietEndHour);
 
         foreach (var item in due)
         {
-            var pending = new PendingNotification(item.Id, item.Kind, item.UserId, item.TaskId);
-            var result = DeliveryResult.NotReachable("No channel can reach this person.");
-            foreach (var channel in channels)
+            // Spec §3.C.5: nothing proactive in quiet hours except escalations to managers. Wait, don't drop.
+            if (quiet && !NotificationKinds.AllowedInQuietHours(item.Kind))
             {
-                result = await channel.DeliverAsync(pending, cancellationToken);
-                if (result.Outcome != DeliveryOutcome.NotReachable)
+                item.NextAttemptAt = NotificationSchedule.QuietEndsAt(now, zone, org.QuietEndHour);
+                await db.SaveChangesAsync(cancellationToken);
+                continue;
+            }
+
+            var pending = new PendingNotification(item.Id, item.Kind, item.UserId, item.TaskId, item.PayloadJson);
+            var built = await builder.BuildAsync(pending, cancellationToken);
+            var result = built.Message is null
+                ? DeliveryResult.Obsolete(built.ObsoleteReason ?? "Nothing to send.")
+                : DeliveryResult.NotReachable("No channel can reach this person.");
+
+            if (built.Message is { } message)
+            {
+                foreach (var channel in channels)
                 {
-                    item.Channel = channel.Name;
-                    break;
+                    result = await channel.DeliverAsync(pending, message, cancellationToken);
+                    if (result.Outcome != DeliveryOutcome.NotReachable)
+                    {
+                        item.Channel = channel.Name;
+                        break;
+                    }
                 }
             }
 
@@ -49,7 +75,8 @@ public sealed class NotificationDispatcher(
                     item.CompletedAt = now;
                     break;
                 case DeliveryOutcome.NotReachable:
-                    item.Status = OutboxStatus.Skipped;   // e.g. no WhatsApp linked (email fallback comes later)
+                case DeliveryOutcome.Obsolete:
+                    item.Status = OutboxStatus.Skipped;   // no channel reaches them, or nothing to say any more
                     item.CompletedAt = now;
                     break;
                 case DeliveryOutcome.PermanentFailure:
@@ -78,7 +105,6 @@ public sealed class NotificationDispatcher(
     private static TimeSpan Backoff(int attempt) => TimeSpan.FromSeconds(Math.Min(3600, 30 * Math.Pow(2, attempt - 1)));
 }
 
-/// <summary>Runs the dispatcher every few seconds (API host only). Step 14 can move this onto Hangfire.</summary>
 public sealed class NotificationWorker(IServiceScopeFactory scopes, ILogger<NotificationWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(3);

@@ -1,7 +1,132 @@
 @page "/settings"
 @attribute [Authorize(Roles = "Admin")]
+@using Bassign.Application.Notifications.Settings
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
 
 <PageTitle>Settings · Bassign</PageTitle>
 
 <h1 class="ba-page-title">Settings</h1>
-<p class="ba-page-sub">Organization settings & branding arrive later.</p>
+<p class="ba-page-sub">How and when Bassign reaches your team. Times are in your organization's time zone.</p>
+
+@if (_form is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <section class="ba-card pa-5" aria-labelledby="notif-h">
+                <h2 class="ba-section-label" id="notif-h">Notifications</h2>
+
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int" @bind-Value="_form.ReminderLeadMinutes" Label="Remind the assignee" Variant="Variant.Outlined"
+                                   HelperText="Before the task is due">
+                            @foreach (var (minutes, label) in Leads) { <MudSelectItem T="int" Value="minutes">@label</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int" @bind-Value="_form.EscalateAfterMinutes" Label="Tell managers when overdue by" Variant="Variant.Outlined">
+                            @foreach (var (minutes, label) in Delays) { <MudSelectItem T="int" Value="minutes">@label</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int" @bind-Value="_form.EscalationCooldownMinutes" Label="Then remind managers every" Variant="Variant.Outlined"
+                                   HelperText="Until the task is done">
+                            @foreach (var (minutes, label) in Cooldowns) { <MudSelectItem T="int" Value="minutes">@label</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="int" @bind-Value="_form.DigestHour" Label="Daily digest to managers at" Variant="Variant.Outlined"
+                                   Disabled="!_form.DigestEnabled">
+                            @foreach (var h in Hours) { <MudSelectItem T="int" Value="h">@Hour(h)</MudSelectItem> }
+                        </MudSelect>
+                        <MudSwitch T="bool" @bind-Value="_form.DigestEnabled" Color="Color.Primary" Label="Send the daily digest" Class="mt-1" />
+                    </MudItem>
+                </MudGrid>
+
+                <h3 class="ba-section-label mt-5">Quiet hours</h3>
+                <p class="ba-muted" style="margin:0 0 12px;">No reminders or new-task messages to staff in this window — they're held until it ends. Escalations to managers still go out.</p>
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudSelect T="int" @bind-Value="_form.QuietStartHour" Label="From" Variant="Variant.Outlined">
+                            @foreach (var h in Hours) { <MudSelectItem T="int" Value="h">@Hour(h)</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudSelect T="int" @bind-Value="_form.QuietEndHour" Label="Until" Variant="Variant.Outlined"
+                                   HelperText="@(_form.QuietStartHour == _form.QuietEndHour ? "Same time = no quiet hours" : null)">
+                            @foreach (var h in Hours) { <MudSelectItem T="int" Value="h">@Hour(h)</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+
+                <div class="d-flex gap-2 mt-5">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Save">Save</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="ResetDefaults">Use recommended</MudButton>
+                </div>
+            </section>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <section class="ba-card pa-5" aria-labelledby="jobs-h">
+                <h2 class="ba-section-label" id="jobs-h">Background jobs</h2>
+                <p class="ba-muted" style="margin:0 0 12px;">Reminders and escalations are checked every 5 minutes, the digest every 15. See runs, failures and retries on the jobs dashboard.</p>
+                <MudButton Variant="Variant.Outlined" Href="/hangfire" Target="_blank" StartIcon="@Icons.Material.Outlined.Schedule">Open jobs dashboard</MudButton>
+            </section>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private sealed class Form
+    {
+        public int ReminderLeadMinutes { get; set; }
+        public int EscalateAfterMinutes { get; set; }
+        public int EscalationCooldownMinutes { get; set; }
+        public bool DigestEnabled { get; set; }
+        public int DigestHour { get; set; }
+        public int QuietStartHour { get; set; }
+        public int QuietEndHour { get; set; }
+    }
+
+    private static readonly (int, string)[] Leads = [(30, "30 minutes"), (60, "1 hour"), (120, "2 hours"), (240, "4 hours"), (480, "8 hours"), (1440, "1 day")];
+    private static readonly (int, string)[] Delays = [(0, "As soon as it's due"), (30, "30 minutes"), (60, "1 hour"), (120, "2 hours"), (240, "4 hours"), (1440, "1 day")];
+    private static readonly (int, string)[] Cooldowns = [(240, "4 hours"), (720, "12 hours"), (1440, "24 hours"), (2880, "2 days")];
+    private static readonly int[] Hours = Enumerable.Range(0, 24).ToArray();
+
+    private Form? _form;
+    private bool _busy;
+
+    private static string Hour(int h) => $"{h:00}:00";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var vm = await Sender.Send(new GetNotificationSettingsQuery());
+        _form = new Form
+        {
+            ReminderLeadMinutes = vm.ReminderLeadMinutes, EscalateAfterMinutes = vm.EscalateAfterMinutes,
+            EscalationCooldownMinutes = vm.EscalationCooldownMinutes, DigestEnabled = vm.DigestEnabled,
+            DigestHour = vm.DigestHour, QuietStartHour = vm.QuietStartHour, QuietEndHour = vm.QuietEndHour
+        };
+    }
+
+    private void ResetDefaults() => _form = new Form
+    {
+        ReminderLeadMinutes = 120, EscalateAfterMinutes = 60, EscalationCooldownMinutes = 1440,
+        DigestEnabled = true, DigestHour = 6, QuietStartHour = 20, QuietEndHour = 6
+    };
+
+    private async Task Save()
+    {
+        if (_form is null) return;
+        _busy = true;
+        var result = await Sender.TrySend(new SaveNotificationSettingsCommand(new NotificationSettingsVm(
+            _form.ReminderLeadMinutes, _form.EscalateAfterMinutes, _form.EscalationCooldownMinutes,
+            _form.DigestEnabled, _form.DigestHour, _form.QuietStartHour, _form.QuietEndHour)));
+        _busy = false;
+        Snackbar.Add(result.IsSuccess ? "Notification settings saved." : result.Error.Message, result.IsSuccess ? Severity.Success : Severity.Error);
+    }
+}

@@ -1,5 +1,6 @@
 using Bassign.Application.Ai;
 using Bassign.Application.Common.Auditing;
+using Bassign.Application.Common.Email;
 using Bassign.Application.Common.Persistence;
 using Bassign.Application.Common.Security;
 using Bassign.Application.Common.Directory;
@@ -14,6 +15,7 @@ using Bassign.Application.Organizations;
 using Bassign.Application.Tasks;
 using Bassign.Application.Teams;
 using Bassign.Infrastructure.Ai;
+using Bassign.Infrastructure.Email;
 using Bassign.Infrastructure.Options;
 using Bassign.Infrastructure.Persistence;
 using Bassign.Infrastructure.Auditing;
@@ -67,7 +69,7 @@ public static class DependencyInjection
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
         services.AddScoped<IIdentityAdmin, IdentityAdmin>();
-        services.AddScoped<IInviteNotifier, LoggingInviteNotifier>();
+        services.AddScoped<IInviteNotifier, EmailInviteNotifier>();
         services.AddSingleton<ISecureTokens, SecureTokens>();
         services.AddScoped<ITaskSyncReader, TaskSyncReader>();
         services.AddScoped<IOperationLog, OperationLog>();
@@ -99,7 +101,24 @@ public static class DependencyInjection
                 })
                 .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
         }
-        services.AddScoped<INotificationChannel, WhatsAppChannel>();
+        services.AddScoped<INotificationChannel, WhatsAppChannel>();   // tried first …
+
+        // Email (spec §3.C.1 fallback; invites). Provider "pickup" in development writes .eml files.
+        var emailSection = configuration.GetSection(EmailOptions.Section);
+        services.AddOptions<EmailOptions>().Bind(emailSection);
+        var email = emailSection.Get<EmailOptions>() ?? new EmailOptions();
+        if (email.IsSendGrid)
+            services.AddHttpClient<IEmailSender, SendGridEmailSender>(client =>
+                {
+                    client.BaseAddress = new Uri("https://api.sendgrid.com/");
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", email.ApiKey);
+                })
+                .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
+        else if (email.IsDisabled)
+            services.AddSingleton<IEmailSender, DisabledEmailSender>();
+        else
+            services.AddSingleton<IEmailSender, PickupFolderEmailSender>();
+        services.AddScoped<INotificationChannel, EmailChannel>();      // … then email
 
         // Inbound: webhook → durable inbox (dedupe) → worker → conversation (docs/whatsapp.md)
         services.AddScoped<IWebhookInboxStore, EfWebhookInboxStore>();

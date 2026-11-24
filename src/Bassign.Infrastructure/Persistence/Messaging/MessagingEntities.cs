@@ -42,6 +42,10 @@ public sealed class OutboundNotification
     public string Kind { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
     public Guid? TaskId { get; set; }
+    /// <summary>Set by scheduled jobs (reminder/escalation/digest) so re-runs never queue twice. Unique.</summary>
+    public string? DedupeKey { get; set; }
+    /// <summary>Precomputed content (the daily digest), JSON.</summary>
+    public string? PayloadJson { get; set; }
     public string Status { get; set; } = OutboxStatus.Pending;
     public string? Channel { get; set; }
     public int Attempts { get; set; }
