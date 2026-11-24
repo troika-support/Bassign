@@ -6,6 +6,8 @@
     <Project Path="src/Bassign.Api/Bassign.Api.csproj" />
     <Project Path="src/Bassign.Web/Bassign.Web.csproj" />
     <Project Path="src/Bassign.UI.Shared/Bassign.UI.Shared.csproj" />
+    <Project Path="src/Bassign.Field.Core/Bassign.Field.Core.csproj" />
+    <Project Path="src/Bassign.Mobile/Bassign.Mobile.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Bassign.UnitTests/Bassign.UnitTests.csproj" />

@@ -20,3 +20,11 @@
 .ba-chip--done { background:#E6F4EC; color:var(--ba-success); }
 .ba-chip--overdue { background:#FBEAEA; color:var(--ba-danger); }
 .ba-chip--inprogress { background:#FBF0E6; color:var(--ba-warning); }
+
+/* Field card extras */
+.ba-card { background:var(--ba-card); border:1px solid var(--ba-line); border-radius:var(--ba-radius-card, 12px); box-shadow:var(--ba-shadow); }
+.ba-task__due.is-overdue { color:var(--ba-danger); font-weight:500; }
+.ba-task__hint { color:var(--ba-secondary); font-size:.9rem; margin:8px 0 0; }
+.ba-task__notice { color:var(--ba-danger); background:#FBEAEA; border-radius:8px; padding:8px 12px; font-size:.9rem; margin:12px 0 0; }
+.ba-btn:disabled { opacity:.6; cursor:default; }
+.ba-btn:focus-visible { outline:3px solid var(--ba-accent); outline-offset:2px; }

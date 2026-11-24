@@ -1,4 +1,6 @@
+using Bassign.Domain.Organizations;
 using Bassign.Domain.Tasks;
+using Bassign.Domain.Teams;
 using Bassign.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +13,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<ProcessedOperation> ProcessedOperations => Set<ProcessedOperation>();
+    public DbSet<OrganizationSettings> OrganizationSettings => Set<OrganizationSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

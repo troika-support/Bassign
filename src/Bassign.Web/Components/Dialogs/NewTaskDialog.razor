@@ -1,12 +1,21 @@
 @using Bassign.Application.Tasks.CreateTask
-@inject Mediator.ISender Sender
+@inject IUiSender Sender
+@inject OrgClock Clock
 
 <MudDialog>
     <DialogContent>
-        <MudTextField @bind-Value="_title" Label="Title" Required="true" Immediate="true" Class="mb-3" />
-        <MudTextField @bind-Value="_detail" Label="Detail" Lines="3" Class="mb-3" />
-        <MudDatePicker @bind-Date="_due" Label="Due date" Editable="true" Class="mb-3" />
-        <MudCheckBox @bind-Value="_requiresProof" Label="Require a proof-of-work photo" />
+        <MudTextField Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_title" Label="Title" Required="true" Immediate="true" Class="mb-3" />
+        <MudTextField Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_detail" Label="Detail" Lines="3" Class="mb-3" />
+        <div style="display:flex; gap:12px; flex-wrap:wrap;" class="mb-3">
+            <div style="flex:1; min-width:160px;">
+                <MudDatePicker Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Date="_due" Label="Due date" Editable="true" Clearable="true" />
+            </div>
+            <div style="flex:1; min-width:140px;">
+                <MudTimePicker Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Time="_time" Label="Time (optional)" AmPm="true" Editable="true" Clearable="true"
+                               Disabled="@(_due is null)" HelperText="Blank = end of the day" />
+            </div>
+        </div>
+        <MudCheckBox @bind-Value="_requiresProof" Label="Require a proof-of-work photo" Class="ml-n3" />
         @if (_error is not null)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
@@ -24,6 +33,7 @@
     private string _title = "";
     private string? _detail;
     private DateTime? _due;
+    private TimeSpan? _time;
     private bool _requiresProof;
     private string? _error;
     private bool _busy;
@@ -32,8 +42,8 @@
     {
         _busy = true;
         _error = null;
-        DateTimeOffset? due = _due is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d, DateTimeKind.Utc)) : null;
-        var r = await Sender.Send(new CreateTaskCommand(_title, _detail, due, _requiresProof, null));
+        DateTimeOffset? due = _due is { } d ? OrgClock.FromPicker(d, _time, await Clock.ZoneAsync()) : null;
+        var r = await Sender.TrySend(new CreateTaskCommand(_title, _detail, due, _requiresProof, null));
         if (r.IsSuccess) MudDialog.Close(DialogResult.Ok(true));
         else { _error = r.Error.Message; _busy = false; }
     }

@@ -1,0 +1,99 @@
+/* Field app shell — calm, single-focus, thumb-friendly (design-system §3, §7, §8.10). */
+html, body { margin:0; background:var(--ba-bg); color:var(--ba-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+.ba-boot { text-align:center; padding-top:40vh; color:var(--ba-muted); }
+
+.ba-field { min-height:100vh; box-sizing:border-box; max-width:600px; margin:0 auto;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 20px);
+  display:flex; flex-direction:column; gap:16px; }
+
+.ba-field__head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.ba-field__eyebrow { margin:0; color:var(--ba-muted); font-size:.85rem; }
+.ba-field__hello { margin:2px 0 0; font-size:1.6rem; font-weight:600; letter-spacing:-.01em; }
+.ba-field__sync { display:inline-flex; align-items:center; gap:8px; min-height:44px; min-width:44px; padding:0 12px;
+  border-radius:999px; border:1px solid var(--ba-line); background:var(--ba-card); color:var(--ba-secondary);
+  font:inherit; font-size:1rem; cursor:pointer; }
+.ba-spin { display:inline-block; animation: ba-spin 1s linear infinite; }
+@keyframes ba-spin { to { transform: rotate(360deg); } }
+
+.ba-flash { margin:0; padding:12px 14px; border-radius:12px; background:var(--ba-accent-tint); color:var(--ba-ink); }
+
+.ba-field__section { margin:8px 0 0; font-size:.78rem; font-weight:600; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ba-muted); }
+.ba-field__list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.ba-field__row { width:100%; min-height:56px; display:flex; align-items:center; gap:12px; padding:10px 14px;
+  text-align:left; background:var(--ba-card); border:1px solid var(--ba-line); border-radius:12px;
+  color:var(--ba-ink); font:inherit; cursor:pointer; }
+.ba-field__row:focus-visible, .ba-field__sync:focus-visible, .ba-link:focus-visible { outline:3px solid var(--ba-accent); outline-offset:2px; }
+.ba-field__row-title { flex:1; font-weight:500; }
+.ba-field__row-meta { color:var(--ba-muted); font-size:.85rem; white-space:nowrap; }
+.ba-dot { width:8px; height:8px; border-radius:999px; background:var(--ba-muted); flex:none; }
+
+.ba-field__foot { margin-top:auto; padding-top:16px; border-top:1px solid var(--ba-line); display:flex; flex-wrap:wrap;
+  justify-content:space-between; align-items:center; gap:8px; color:var(--ba-muted); font-size:.9rem; }
+.ba-field__warn { color:var(--ba-warning); }
+.ba-link { background:none; border:none; color:var(--ba-accent); font:inherit; font-weight:500; min-height:44px; padding:0 4px; cursor:pointer; }
+
+/* Sign-in */
+.ba-signin-wrap { flex:1; display:flex; align-items:center; }
+.ba-signin { width:100%; box-sizing:border-box; padding:28px 22px; }
+.ba-signin h1 { font-size:1.5rem; font-weight:600; margin:14px 0 4px; }
+.ba-page-sub { color:var(--ba-muted); margin:0 0 20px; }
+.ba-orgmark { width:48px; height:48px; border-radius:12px; background:var(--ba-accent); color:#fff;
+  display:inline-flex; align-items:center; justify-content:center; font-weight:600; font-size:1.3rem; }
+.ba-label { display:block; font-size:.9rem; color:var(--ba-secondary); margin-bottom:6px; }
+.ba-input { width:100%; box-sizing:border-box; min-height:52px; padding:0 14px; margin-bottom:16px; font-size:1.05rem;
+  border:1px solid var(--ba-input-border); border-radius:12px; background:var(--ba-card); color:var(--ba-ink); }
+.ba-input:focus { outline:3px solid var(--ba-accent); outline-offset:1px; }
+.ba-submit { width:100%; min-height:52px; border:none; border-radius:12px; background:var(--ba-accent); color:#fff;
+  font-size:1.05rem; font-weight:500; cursor:pointer; }
+.ba-submit:disabled { opacity:.6; }
+
+#blazor-error-ui { display:none; position:fixed; left:0; right:0; bottom:0; padding:14px 16px;
+  background:#FBEAEA; color:var(--ba-danger); }
+#blazor-error-ui .reload { color:inherit; font-weight:600; }
+
+@media (prefers-reduced-motion: reduce) { .ba-spin { animation:none; } }
+
+/* The task card fills the column (its shared "margin: 0 auto" would shrink-wrap it in a flex column). */
+.ba-field .ba-task { width:100%; max-width:none; margin:0; box-sizing:border-box; }
+.ba-field .ba-task__title { font-size:1.4rem; }
+.ba-field__sync-icon { flex:none; }
+
+/* Password show/hide */
+.ba-password { position:relative; }
+.ba-password .ba-input { padding-right:72px; }
+.ba-password__toggle { position:absolute; right:6px; top:8px; height:36px; padding:0 12px; border:none; border-radius:8px;
+  background:transparent; color:var(--ba-accent); font:inherit; font-weight:500; cursor:pointer; }
+.ba-password__toggle:focus-visible { outline:3px solid var(--ba-accent); outline-offset:1px; }
+
+/* Header actions: sync status + account avatar (top-right, out of the thumb zone) */
+.ba-field__head-actions { display:flex; align-items:center; gap:8px; }
+.ba-avatar-btn { width:44px; height:44px; border-radius:999px; border:none; flex:none; cursor:pointer;
+  background:var(--ba-accent-tint); color:var(--ba-accent); font:inherit; font-weight:600; font-size:.95rem;
+  display:inline-flex; align-items:center; justify-content:center; }
+.ba-avatar-btn:focus-visible { outline:3px solid var(--ba-accent); outline-offset:2px; }
+.ba-avatar-btn--lg { width:56px; height:56px; font-size:1.15rem; cursor:default; }
+
+/* Account sheet (bottom sheet) */
+.ba-sheet-backdrop { position:fixed; inset:0; background:rgba(16,24,40,.38); z-index:10; }
+.ba-sheet { position:fixed; left:0; right:0; bottom:0; z-index:11; box-sizing:border-box;
+  max-width:600px; margin:0 auto; padding:10px 20px 24px; background:var(--ba-card);
+  border-radius:20px 20px 0 0; box-shadow:0 -8px 30px rgba(16,24,40,.18);
+  display:flex; flex-direction:column; gap:14px; animation: ba-sheet-in 180ms ease-out; }
+@keyframes ba-sheet-in { from { transform:translateY(24px); opacity:0; } to { transform:none; opacity:1; } }
+.ba-sheet__grip { width:40px; height:4px; border-radius:999px; background:var(--ba-line); margin:0 auto 6px; }
+.ba-sheet__who { display:flex; align-items:center; gap:14px; }
+.ba-sheet__name { margin:0; font-size:1.2rem; font-weight:600; }
+.ba-sheet__meta { margin:2px 0 0; color:var(--ba-muted); font-size:.9rem; }
+.ba-sheet__row { display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 0; border-top:1px solid var(--ba-line); border-bottom:1px solid var(--ba-line); color:var(--ba-secondary); }
+.ba-sheet__warn { margin:0; padding:10px 12px; border-radius:10px; background:#FBF0E6; color:var(--ba-warning); font-size:.92rem; }
+.ba-sheet__signout { min-height:52px; border-radius:12px; border:1px solid var(--ba-danger); background:transparent;
+  color:var(--ba-danger); font:inherit; font-weight:600; cursor:pointer; }
+.ba-sheet__close { min-height:48px; border:none; background:transparent; color:var(--ba-secondary); font:inherit; cursor:pointer; }
+.ba-sheet__signout:focus-visible, .ba-sheet__close:focus-visible { outline:3px solid var(--ba-accent); outline-offset:2px; }
+@media (prefers-reduced-motion: reduce) { .ba-sheet { animation:none; } }
+
+/* The footer is gone; let the list breathe to the bottom edge */
+.ba-field__foot { display:none; }

@@ -38,6 +38,23 @@ public static class DevSeeder
             await userManager.AddToRoleAsync(admin, "Admin");
         }
 
+        // Dev-only teammates so Team, Assign and Workload have people to show.
+        foreach (var (email, name, role, password) in new[]
+        {
+            ("manager@bassign.local", "Chipo Moyo", "Manager", "Manager!2345"),
+            ("tendai@bassign.local", "Tendai Ncube", "Staff", "Staff!2345"),
+            ("rudo@bassign.local", "Rudo Chikwanha", "Staff", "Staff!2345")
+        })
+        {
+            if (await userManager.FindByEmailAsync(email) is not null) continue;
+            var person = new ApplicationUser
+            {
+                UserName = email, Email = email, EmailConfirmed = true, DisplayName = name, IsActive = true
+            };
+            await userManager.CreateAsync(person, password);   // dev-only passwords
+            await userManager.AddToRoleAsync(person, role);
+        }
+
         if (!await db.Tasks.AnyAsync(cancellationToken))
         {
             var now = clock.GetUtcNow();

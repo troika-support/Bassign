@@ -90,6 +90,7 @@ public sealed class TasksController(ISender sender) : ControllerBase
     private ObjectResult ToProblem(Error error)
     {
         var status = error.Code.EndsWith("not_found", StringComparison.Ordinal) ? StatusCodes.Status404NotFound
+            : error.Code.EndsWith("forbidden", StringComparison.Ordinal) ? StatusCodes.Status403Forbidden
             : error.Code.Contains("invalid", StringComparison.Ordinal) ? StatusCodes.Status409Conflict
             : StatusCodes.Status400BadRequest;
         return Problem(statusCode: status, title: error.Message, type: error.Code);

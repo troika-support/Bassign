@@ -18,7 +18,7 @@ public sealed class AuthService(
         var roles = await userManager.GetRolesAsync(user);
         var (access, expires) = jwt.Create(user, roles);
         var refresh = await refreshTokens.IssueAsync(user.Id, cancellationToken);
-        return new AuthTokens(access, refresh, expires);
+        return new AuthTokens(access, refresh, expires, user.DisplayName, roles.ToList());
     }
 
     public async Task<Result<AuthTokens>> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default)
@@ -33,6 +33,6 @@ public sealed class AuthService(
 
         var roles = await userManager.GetRolesAsync(user);
         var (access, expires) = jwt.Create(user, roles);
-        return new AuthTokens(access, rotation.NewRawToken, expires);
+        return new AuthTokens(access, rotation.NewRawToken, expires, user.DisplayName, roles.ToList());
     }
 }

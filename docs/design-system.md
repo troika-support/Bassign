@@ -245,3 +245,9 @@ discipline above; changes the *surface language*:
 
 Later screens (Tasks grid, Team, Settings, mobile field view) follow this same card + accent + sidebar
 language.
+
+### Form inputs (rule)
+Every MudBlazor input (`MudTextField`, `MudSelect`, `MudDatePicker`, `MudTimePicker`, `MudNumericField`,
+`MudAutocomplete`) is **outlined**: `Variant="Variant.Outlined"`, and `Margin="Margin.Dense"` inside
+dialogs and side panels. MudBlazor 9.9 has no global default for this (inputs hard-code `Variant.Text`),
+so set it on every field — underline inputs are a bug.

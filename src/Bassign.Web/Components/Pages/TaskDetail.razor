@@ -2,11 +2,14 @@
 @attribute [Authorize]
 @using Bassign.Application.Tasks.GetTaskDetail
 @using Bassign.Application.Tasks.CompleteTask
-@inject Mediator.ISender Sender
+@inject IUiSender Sender
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
+@inject OrgClock Clock
 
-<PageTitle>Task · Bassign</PageTitle>
+<PageTitle>@(_vm?.Task.Title ?? "Task") · Bassign</PageTitle>
+
+<a href="/tasks" class="ba-back">← Tasks</a>
 
 @if (_loading)
 {
@@ -14,75 +17,147 @@
 }
 else if (_vm is null)
 {
-    <h1 class="ba-page-title">Task not found</h1>
-    <MudLink Href="/tasks">Back to tasks</MudLink>
+    <div class="ba-card pa-6" style="max-width:520px;">
+        <h1 class="ba-page-title">Task not found</h1>
+        <p class="ba-page-sub" style="margin:0;">It may have been removed. <a href="/tasks">Back to tasks</a></p>
+    </div>
 }
 else
 {
     var t = _vm.Task;
-    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <h1 class="ba-page-title" style="margin:0;">@t.Title</h1>
-        <StatusChip Status="@DisplayStatus(t)" />
+    var open = t.Status is "Todo" or "Accepted";
+
+    <div class="ba-detail-head">
+        <div class="ba-detail-head__title">
+            <h1 class="ba-page-title" style="margin:0;">@t.Title</h1>
+            <StatusChip Status="@DisplayStatus(t)" />
+        </div>
+        <div class="ba-detail-head__actions">
+            @if (open)
+            {
+                <AuthorizeView Roles="Admin,Manager" Context="auth">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Edit" OnClick="Edit">Edit</MudButton>
+                    @if (t.AssigneeId is null)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="Assign">Assign</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="Assign">Reassign</MudButton>
+                    }
+                </AuthorizeView>
+            }
+            @if (t.Status == "Accepted")
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="MarkDone">Mark done</MudButton>
+            }
+        </div>
     </div>
 
-    <MudGrid Class="mt-2 mb-4">
-        <MudItem xs="12" md="6">
-            <p class="ba-metric__label">Assignee</p>
-            <p>@(_vm.AssigneeName ?? "Unassigned")</p>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="8">
+            <section class="ba-card pa-5 mb-4" aria-labelledby="desc-h">
+                <h2 class="ba-section-label" id="desc-h">Description</h2>
+                @if (string.IsNullOrWhiteSpace(t.Detail))
+                {
+                    <p class="ba-muted" style="margin:0;">No description.</p>
+                }
+                else
+                {
+                    <p class="ba-body">@t.Detail</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(t.ProofPhotoRef))
+                {
+                    <h2 class="ba-section-label" style="margin-top:20px;">Proof of work</h2>
+                    <img src="/proof/@t.ProofPhotoRef" alt="Proof-of-work photo for @t.Title" loading="lazy"
+                         style="width:100%; max-width:440px; border-radius:10px; display:block;" />
+                }
+            </section>
+
+            <section class="ba-card pa-5" aria-labelledby="activity-h">
+                <h2 class="ba-section-label" id="activity-h">Activity</h2>
+                <ol class="ba-activity">
+                    @foreach (var (item, index) in _vm.Activity.OrderByDescending(a => a.At).Select((a, i) => (a, i)))
+                    {
+                        <li class="ba-activity__item @(index == 0 ? "is-latest" : "")">
+                            <span class="ba-activity__dot" aria-hidden="true"></span>
+                            <div>
+                                <span class="ba-activity__what">@ActionLabel(item.Action)</span>
+                                <span class="ba-muted"> by @item.ActorName</span>
+                                <div class="ba-activity__when">@FormatInstant(item.At)</div>
+                            </div>
+                        </li>
+                    }
+                </ol>
+            </section>
         </MudItem>
-        <MudItem xs="12" md="6">
-            <p class="ba-metric__label">@(t.CompletedAt is null ? "Due" : "Completed")</p>
-            <p>@(t.CompletedAt is { } c ? c.LocalDateTime.ToString(DisplayFormats.DateTime)
-                 : t.DueDate is { } d ? d.LocalDateTime.ToString(DisplayFormats.DateTime) : "No due date")</p>
-        </MudItem>
-        <MudItem xs="12" md="6">
-            <p class="ba-metric__label">Created by</p>
-            <p>@_vm.CreatedByName</p>
+
+        <MudItem xs="12" md="4">
+            <aside class="ba-card pa-5" aria-label="Task properties">
+                <dl class="ba-props">
+                    <div>
+                        <dt>Assignee</dt>
+                        <dd>
+                            @if (_vm.AssigneeName is null)
+                            {
+                                <span class="ba-muted">Unassigned</span>
+                            }
+                            else
+                            {
+                                <span class="ba-avatar" style="width:26px; height:26px; font-size:.7rem;">@Initials(_vm.AssigneeName)</span>
+                                <span>@_vm.AssigneeName</span>
+                            }
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Due</dt>
+                        <dd>
+                            @if (t.DueDate is { } due)
+                            {
+                                var zoned = OrgClock.InZone(due, _zone);
+                                var (relative, overdue) = OrgClock.Relative(zoned, _zone);
+                                <span>@OrgClock.FormatDue(zoned)</span>
+                                @if (open)
+                                {
+                                    <span class="ba-pill @(overdue ? "ba-pill--off" : "")">@relative</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="ba-muted">No due date</span>
+                            }
+                        </dd>
+                    </div>
+                    @if (t.CompletedAt is { } done)
+                    {
+                        <div><dt>Completed</dt><dd>@FormatInstant(done)</dd></div>
+                    }
+                    <div>
+                        <dt>Proof photo</dt>
+                        <dd>@(t.RequiresProofPhoto ? "Required to finish" : "Not required")</dd>
+                    </div>
+                    <div>
+                        <dt>Created</dt>
+                        <dd>@FormatInstant(t.CreatedAt)<br /><span class="ba-muted">by @_vm.CreatedByName</span></dd>
+                    </div>
+                </dl>
+            </aside>
         </MudItem>
     </MudGrid>
-
-    @if (!string.IsNullOrWhiteSpace(t.Detail))
-    {
-        <MudText Class="mb-4">@t.Detail</MudText>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(t.ProofPhotoRef))
-    {
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">Proof-of-work photo attached (@t.ProofPhotoRef).</MudAlert>
-    }
-
-    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px;">
-        @if (t.Status == "Accepted")
-        {
-            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="MarkDone">Mark done</MudButton>
-        }
-        @if (t.Status is not ("Done" or "Declined"))
-        {
-            <AuthorizeView Roles="Admin,Manager" Context="auth">
-                <MudButton Variant="Variant.Outlined" OnClick="Reassign">Reassign</MudButton>
-                <MudButton Variant="Variant.Outlined" OnClick="Edit">Edit</MudButton>
-            </AuthorizeView>
-        }
-    </div>
-
-    <MudText Typo="Typo.h6" Class="mb-2">Activity</MudText>
-    <MudTimeline TimelinePosition="TimelinePosition.Start">
-        @foreach (var a in _vm.Activity)
-        {
-            <MudTimelineItem Size="Size.Small" Color="Color.Default">
-                <MudText Typo="Typo.body2"><b>@ActionLabel(a.Action)</b> · @a.ActorName</MudText>
-                <MudText Typo="Typo.caption">@a.At.LocalDateTime.ToString(DisplayFormats.DateTime)</MudText>
-            </MudTimelineItem>
-        }
-    </MudTimeline>
 }
 
 @code {
     [Parameter] public Guid Id { get; set; }
     private TaskDetailVm? _vm;
     private bool _loading = true;
+    private TimeZoneInfo _zone = TimeZoneInfo.Utc;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        _zone = await Clock.ZoneAsync();
+        await Load();
+    }
 
     private async Task Load()
     {
@@ -94,15 +169,15 @@ else
 
     private async Task MarkDone()
     {
-        var r = await Sender.Send(new CompleteTaskCommand(Id, null));
+        var r = await Sender.TrySend(new CompleteTaskCommand(Id, null));
         if (!r.IsSuccess) Snackbar.Add(r.Error.Message, Severity.Warning);
         await Load();
     }
 
-    private async Task Reassign()
+    private async Task Assign()
     {
         var parameters = new DialogParameters<AssignDialog> { { x => x.TaskIds, new List<Guid> { Id } } };
-        var dialog = await Dialogs.ShowAsync<AssignDialog>("Reassign task", parameters);
+        var dialog = await Dialogs.ShowAsync<AssignDialog>(_vm!.Task.AssigneeId is null ? "Assign task" : "Reassign task", parameters);
         if (!(await dialog.Result)!.Canceled) await Load();
     }
 
@@ -112,6 +187,8 @@ else
         var dialog = await Dialogs.ShowAsync<EditTaskDialog>("Edit task", parameters);
         if (!(await dialog.Result)!.Canceled) await Load();
     }
+
+    private string FormatInstant(DateTimeOffset value) => OrgClock.InZone(value, _zone).ToString("ddd d MMM, h:mm tt");
 
     private static string DisplayStatus(TaskDto t)
     {
@@ -124,9 +201,15 @@ else
         "task.create" => "Created",
         "task.assign" => "Assigned",
         "task.accept" => "Accepted",
-        "task.complete" => "Completed",
+        "task.complete" => "Marked done",
         "task.decline" => "Declined",
         "task.update" => "Edited",
         _ => action
     };
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : (parts.Length == 1 ? parts[0][..1] : $"{parts[0][0]}{parts[^1][0]}").ToUpperInvariant();
+    }
 }

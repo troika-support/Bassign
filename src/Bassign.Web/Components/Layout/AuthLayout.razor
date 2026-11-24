@@ -1,8 +1,26 @@
 @inherits LayoutComponentBase
+@using Bassign.Application.Organizations.GetOrganization
+@inject IUiSender Sender
 
-<MudThemeProvider Theme="BassignTheme.Build()" IsDarkMode="false" />
+<MudThemeProvider Theme="_theme" IsDarkMode="false" />
 <MudPopoverProvider />
 
-<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--ba-surface); padding:16px;">
+<HeadContent>
+    <style>@_brandCss</style>
+</HeadContent>
+
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--ba-bg); padding:16px;">
     @Body
 </div>
+
+@code {
+    private MudTheme _theme = BassignTheme.Build();
+    private string _brandCss = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var org = await Sender.Send(new GetOrganizationQuery());
+        _theme = BassignTheme.Build(org.AccentHex);
+        _brandCss = $":root{{--ba-accent:{org.AccentHex};--ba-accent-600:{BrandColors.Shade(org.AccentHex, 0.15)};--ba-accent-tint:{BrandColors.Tint(org.AccentHex, 0.90)};}}";
+    }
+}

@@ -1,9 +1,10 @@
 @page "/tasks"
 @attribute [Authorize]
 @using Bassign.Application.Tasks.ListTasks
-@inject Mediator.ISender Sender
+@inject IUiSender Sender
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
+@inject OrgClock Clock
 
 <PageTitle>Tasks · Bassign</PageTitle>
 
@@ -59,7 +60,7 @@ else
                     <CellTemplate>@(context.Item.AssigneeName ?? "Unassigned")</CellTemplate>
                 </TemplateColumn>
                 <TemplateColumn Title="Due">
-                    <CellTemplate>@(context.Item.DueDate is { } d ? d.LocalDateTime.ToString(DisplayFormats.Date) : "—")</CellTemplate>
+                    <CellTemplate>@(context.Item.DueDate is { } d ? OrgClock.FormatDue(OrgClock.InZone(d, _zone)) : "—")</CellTemplate>
                 </TemplateColumn>
                 <TemplateColumn Title="Status">
                     <CellTemplate><StatusChip Status="@DisplayStatus(context.Item)" /></CellTemplate>
@@ -74,13 +75,18 @@ else
     private HashSet<TaskListItemDto> _selected = [];
     private string _search = "";
     private string _filter = "all";
+    private TimeZoneInfo _zone = TimeZoneInfo.Utc;
 
     private readonly (string Key, string Label)[] _pills =
     [
         ("all", "All"), ("todo", "To do"), ("inprogress", "In progress"), ("overdue", "Overdue")
     ];
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        _zone = await Clock.ZoneAsync();
+        await Load();
+    }
 
     private async Task Load()
     {

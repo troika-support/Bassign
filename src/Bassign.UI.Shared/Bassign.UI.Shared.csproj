@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
+  <!-- Shared by the web app (Blazor Server) and the phone app (MAUI Blazor Hybrid on Android).
+       Uses the Components.Web package, not the ASP.NET Core shared framework, which doesn't exist on Android. -->
   <ItemGroup>
     <SupportedPlatform Include="browser" />
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
   </ItemGroup>
 </Project>

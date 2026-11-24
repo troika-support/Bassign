@@ -1,11 +1,20 @@
 @using Bassign.Application.Tasks.UpdateTask
-@inject Mediator.ISender Sender
+@inject IUiSender Sender
+@inject OrgClock Clock
 
 <MudDialog>
     <DialogContent>
-        <MudTextField @bind-Value="_title" Label="Title" Required="true" Immediate="true" Class="mb-3" />
-        <MudTextField @bind-Value="_detail" Label="Detail" Lines="3" Class="mb-3" />
-        <MudDatePicker @bind-Date="_due" Label="Due date" Editable="true" />
+        <MudTextField Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_title" Label="Title" Required="true" Immediate="true" Class="mb-3" />
+        <MudTextField Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_detail" Label="Detail" Lines="3" Class="mb-3" />
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px;">
+                <MudDatePicker Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Date="_due" Label="Due date" Editable="true" Clearable="true" />
+            </div>
+            <div style="flex:1; min-width:140px;">
+                <MudTimePicker Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Time="_time" Label="Time (optional)" AmPm="true" Editable="true" Clearable="true"
+                               Disabled="@(_due is null)" HelperText="Blank = end of the day" />
+            </div>
+        </div>
         @if (_error is not null)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
@@ -24,22 +33,28 @@
     private string _title = "";
     private string? _detail;
     private DateTime? _due;
+    private TimeSpan? _time;
     private string? _error;
     private bool _busy;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _title = Task.Title;
         _detail = Task.Detail;
-        _due = Task.DueDate?.LocalDateTime;
+        if (Task.DueDate is { } due)
+        {
+            var zoned = OrgClock.InZone(due, await Clock.ZoneAsync());
+            _due = zoned.Date;
+            _time = OrgClock.IsDateOnly(zoned) ? null : zoned.TimeOfDay;
+        }
     }
 
     private async Task Save()
     {
         _busy = true;
         _error = null;
-        DateTimeOffset? due = _due is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d, DateTimeKind.Utc)) : null;
-        var r = await Sender.Send(new UpdateTaskCommand(Task.Id, _title, _detail, due));
+        DateTimeOffset? due = _due is { } d ? OrgClock.FromPicker(d, _time, await Clock.ZoneAsync()) : null;
+        var r = await Sender.TrySend(new UpdateTaskCommand(Task.Id, _title, _detail, due));
         if (r.IsSuccess) MudDialog.Close(DialogResult.Ok(true));
         else { _error = r.Error.Message; _busy = false; }
     }

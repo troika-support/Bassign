@@ -1,41 +1,61 @@
 @page "/sign-in"
 @layout Bassign.Web.Components.Layout.AuthLayout
 @attribute [AllowAnonymous]
+@using Bassign.Application.Organizations.GetOrganization
+@inject IUiSender Sender
 
-<PageTitle>Sign in · Bassign</PageTitle>
+<PageTitle>Sign in · @_orgName</PageTitle>
 
-<MudPaper Elevation="0" Class="pa-8" Style="width:100%; max-width:380px; border:1px solid var(--ba-line); border-radius:12px;">
-    <div style="text-align:center; margin-bottom:24px;">
-        <img src="logo.svg" alt="Bassign" height="28" />
-        <h1 style="font-size:1.25rem; font-weight:500; margin:16px 0 0;">Sign in to Bassign</h1>
+<div class="ba-auth">
+    <div class="ba-card ba-auth__card">
+        <div class="ba-auth__brand">
+            <span class="ba-orgmark ba-orgmark--lg" aria-hidden="true">@_initial</span>
+            <h1 class="ba-auth__title">Sign in to @_orgName</h1>
+            <p class="ba-auth__sub">Welcome back — use your work email.</p>
+        </div>
+
+        @if (Error is not null)
+        {
+            <p class="ba-auth__error" role="alert">That email or password doesn't match.</p>
+        }
+
+        <form method="post" action="/account/login" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+            <label class="ba-label" for="email">Email</label>
+            <input class="ba-input" id="email" name="email" type="email" required autocomplete="username"
+                   autofocus inputmode="email" />
+
+            <label class="ba-label" for="password">Password</label>
+            <div class="ba-password">
+                <input class="ba-input" id="password" name="password" type="@(_showPassword ? "text" : "password")"
+                       required autocomplete="current-password" />
+                <button type="button" class="ba-password__toggle" @onclick="() => _showPassword = !_showPassword"
+                        aria-label="@(_showPassword ? "Hide password" : "Show password")" aria-pressed="@(_showPassword ? "true" : "false")">
+                    @(_showPassword ? "Hide" : "Show")
+                </button>
+            </div>
+
+            <button class="ba-submit" type="submit">Sign in</button>
+        </form>
     </div>
 
-    @if (Error is not null)
-    {
-        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">That email or password doesn't match.</MudAlert>
-    }
-
-    <form method="post" action="/account/login" data-enhance="false">
-        <AntiforgeryToken />
-        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
-
-        <label for="email" style="display:block; font-size:.85rem; color:var(--ba-secondary); margin-bottom:4px;">Email</label>
-        <input id="email" name="email" type="email" required autocomplete="username"
-               style="width:100%; box-sizing:border-box; min-height:44px; padding:0 12px; margin-bottom:16px;
-                      border:1px solid var(--ba-line); border-radius:8px; font-size:1rem;" />
-
-        <label for="password" style="display:block; font-size:.85rem; color:var(--ba-secondary); margin-bottom:4px;">Password</label>
-        <input id="password" name="password" type="password" required autocomplete="current-password"
-               style="width:100%; box-sizing:border-box; min-height:44px; padding:0 12px; margin-bottom:24px;
-                      border:1px solid var(--ba-line); border-radius:8px; font-size:1rem;" />
-
-        <button type="submit"
-                style="width:100%; min-height:48px; border:none; border-radius:8px; background:var(--ba-accent);
-                       color:#fff; font-size:1rem; font-weight:500; cursor:pointer;">Continue</button>
-    </form>
-</MudPaper>
+    <p class="ba-auth__powered">Powered by <span>Bassign</span></p>
+</div>
 
 @code {
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
+    private string _orgName = "Bassign";
+    private string _initial = "B";
+    private bool _showPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var org = await Sender.Send(new GetOrganizationQuery());
+        _orgName = org.Name;
+        _initial = org.Name.Trim() is { Length: > 0 } n ? n[..1].ToUpperInvariant() : "B";
+    }
 }

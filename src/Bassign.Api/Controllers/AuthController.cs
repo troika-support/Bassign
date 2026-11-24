@@ -30,9 +30,10 @@ public sealed class AuthController(IAuthService auth) : ControllerBase
     }
 
     private static AuthResponse ToResponse(AuthTokens t) =>
-        new(t.AccessToken, t.RefreshToken, t.AccessTokenExpiresAt);
+        new(t.AccessToken, t.RefreshToken, t.AccessTokenExpiresAt, t.DisplayName, t.Roles);
 }
 
 public sealed record LoginRequest(string Email, string Password);
 public sealed record RefreshRequest(string RefreshToken);
-public sealed record AuthResponse(string AccessToken, string RefreshToken, DateTimeOffset AccessTokenExpiresAt);
+public sealed record AuthResponse(
+    string AccessToken, string RefreshToken, DateTimeOffset AccessTokenExpiresAt, string DisplayName, IReadOnlyList<string> Roles);

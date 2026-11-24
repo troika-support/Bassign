@@ -1,0 +1,23 @@
+### Bassign API — field sync smoke test (open in Visual Studio and click "Send request")
+@api = http://localhost:5080
+
+### 1. Sign in as a staff member (dev seed) — copy accessToken into @token below
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "email": "tendai@bassign.local", "password": "Staff!2345" }
+
+###
+@token = paste-access-token-here
+
+### 2. Full pull (since=0): Tendai's open tasks + the sync token
+GET {{api}}/sync/tasks?since=0
+Authorization: Bearer {{token}}
+
+### 3. Push an accept twice with the SAME opId → "applied" then "duplicate" (idempotent)
+#    Put one of Tendai's task ids in taskId (assign one to him on the web first).
+POST {{api}}/sync/push
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "operations": [ { "opId": "6f1c2a1e-1111-4a5b-9c3d-000000000001", "taskId": "put-task-id-here", "action": "accept" } ] }

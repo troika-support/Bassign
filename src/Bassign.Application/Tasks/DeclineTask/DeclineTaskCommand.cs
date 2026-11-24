@@ -19,7 +19,7 @@ public sealed class DeclineTaskCommandValidator : AbstractValidator<DeclineTaskC
     public DeclineTaskCommandValidator() => RuleFor(x => x.TaskId).NotEmpty();
 }
 
-public sealed class DeclineTaskHandler(ITaskRepository tasks, IUnitOfWork uow)
+public sealed class DeclineTaskHandler(ITaskRepository tasks, IUnitOfWork uow, ITaskAccess access)
     : IRequestHandler<DeclineTaskCommand, Result<Unit>>
 {
     public async ValueTask<Result<Unit>> Handle(DeclineTaskCommand request, CancellationToken cancellationToken)
@@ -27,6 +27,8 @@ public sealed class DeclineTaskHandler(ITaskRepository tasks, IUnitOfWork uow)
         var task = await tasks.GetByIdAsync(request.TaskId, cancellationToken);
         if (task is null)
             return new Error("task.not_found", "Task not found.");
+        if (!await access.CanWorkOnAsync(task, cancellationToken))
+            return new Error("task.forbidden", "You can only update tasks assigned to you.");
 
         try { task.Decline(request.Reason); }
         catch (InvalidOperationException ex) { return new Error("task.invalid_state", ex.Message); }

@@ -1,7 +1,8 @@
 @page "/"
 @attribute [Authorize]
 @using Bassign.Application.Dashboard
-@inject Mediator.ISender Sender
+@using Bassign.Application.Organizations.GetOrganization
+@inject IUiSender Sender
 
 <PageTitle>Workload · Bassign</PageTitle>
 
@@ -13,6 +14,20 @@ else
 {
     <h1 class="ba-page-title">@_greeting@(_firstName is null ? "" : $", {_firstName}")</h1>
     <p class="ba-page-sub">@DateTime.Now.ToString("dddd d MMM") · @_vm.Metrics.OpenTasks open tasks</p>
+
+    @if (_org is { SetupCompleted: false })
+    {
+        <AuthorizeView Roles="Admin">
+            <div class="ba-card pa-4 mb-5" style="background:var(--ba-accent-tint); border-color:transparent; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                <MudIcon Icon="@Icons.Material.Outlined.Flag" Style="color:var(--ba-accent);" />
+                <div style="flex:1; min-width:220px;">
+                    <b>Finish setting up your workspace</b>
+                    <div class="ba-workload__meta">Name your organization, pick your brand colour and invite your team.</div>
+                </div>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/setup">Start setup</MudButton>
+            </div>
+        </AuthorizeView>
+    }
 
     <MudGrid Spacing="3" Class="mb-6">
         <MetricCard Label="Open tasks" Value="@_vm.Metrics.OpenTasks" Icon="@Icons.Material.Outlined.Assignment"
@@ -83,6 +98,7 @@ else
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private DashboardVm? _vm;
+    private OrganizationVm? _org;
     private string? _firstName;
     private string _greeting = "Hello";
     private List<ChartSeries<double>> _donutSeries = [];
@@ -98,6 +114,7 @@ else
             _firstName = user.Identity?.Name?.Split(' ').FirstOrDefault();
         }
 
+        _org = await Sender.Send(new GetOrganizationQuery());
         _vm = await Sender.Send(new GetDashboardQuery());
         _donutLabels = _vm.StatusMix.Select(s => s.Label).ToArray();
         _donutSeries = _vm.StatusMix.Count == 0 ? []

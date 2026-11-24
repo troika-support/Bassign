@@ -6,14 +6,18 @@
     <base href="/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" />
-    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
-    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+    @* @Assets[...] resolves to a content-hashed URL, so browsers can never serve a stale copy. *@
+    <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Bassign.UI.Shared/css/tokens.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Bassign.UI.Shared/css/motion.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Bassign.UI.Shared/css/components.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 <body>
     <Routes @rendermode="InteractiveServer" />
-    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>

@@ -1,7 +1,179 @@
 @page "/team"
 @attribute [Authorize(Roles = "Admin,Manager")]
+@using Bassign.Application.Identity
+@using Bassign.Application.Teams.GetTeam
+@using Bassign.Application.Teams.InviteUser
+@using Bassign.Application.Teams.RevokeInvite
+@using Bassign.Application.Teams.SetMemberActive
+@using Bassign.Domain.Teams
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Team · Bassign</PageTitle>
 
 <h1 class="ba-page-title">Team</h1>
-<p class="ba-page-sub">Team & invites arrive in step 10.</p>
+<p class="ba-page-sub">@Summary</p>
+
+@if (_vm is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="8">
+            <div class="ba-card pa-4">
+                <MudText Typo="Typo.subtitle1" Class="mb-1" Style="font-weight:600;">People</MudText>
+                @foreach (var m in _vm.Members)
+                {
+                    <div class="ba-workload" style="opacity:@(m.IsActive ? "1" : ".65")">
+                        <span class="ba-avatar">@Initials(m.Name)</span>
+                        <div style="flex:1; min-width:0;">
+                            <div class="ba-workload__name">@m.Name</div>
+                            <div class="ba-workload__meta" style="overflow:hidden; text-overflow:ellipsis;">@m.Email</div>
+                        </div>
+                        <span class="ba-pill">@m.Role</span>
+                        <span class="ba-pill @(m.IsActive ? "ba-pill--ok" : "ba-pill--off")">@(m.IsActive ? "Active" : "Inactive")</span>
+                        @if (_isAdmin)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ToggleActive(m))">
+                                @(m.IsActive ? "Deactivate" : "Reactivate")
+                            </MudButton>
+                        }
+                    </div>
+                }
+            </div>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <div class="ba-card pa-4 mb-3">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">Invite someone</MudText>
+                <MudTextField @bind-Value="_email" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              InputType="InputType.Email" Immediate="true" Class="mb-3" />
+                <MudSelect T="string" @bind-Value="_role" Label="Role" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                    @foreach (var r in _roleOptions)
+                    {
+                        <MudSelectItem T="string" Value="@r">@r</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_error</MudAlert>
+                }
+                <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="@(_busy || string.IsNullOrWhiteSpace(_email))" OnClick="Invite">Send invite</MudButton>
+
+                @if (_lastLink is not null)
+                {
+                    <div class="mt-3 pa-3" style="background:var(--ba-accent-tint); border-radius:10px;">
+                        <div class="ba-workload__meta mb-1">Share this link with @_lastEmail — it works once and expires in 7 days.</div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <code style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.75rem;">@_lastLink</code>
+                            <MudIconButton Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small"
+                                           aria-label="Copy invite link" OnClick="Copy" />
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="ba-card pa-4">
+                <MudText Typo="Typo.subtitle1" Class="mb-1" Style="font-weight:600;">Pending invites</MudText>
+                @if (_vm.Invites.Count == 0)
+                {
+                    <p class="ba-empty__hint">No pending invites.</p>
+                }
+                @foreach (var i in _vm.Invites)
+                {
+                    <div class="ba-workload">
+                        <div style="flex:1; min-width:0;">
+                            <div class="ba-workload__name" style="overflow:hidden; text-overflow:ellipsis;">@i.Email</div>
+                            <div class="ba-workload__meta">@i.Role · expires @i.ExpiresAt.LocalDateTime.ToString(DisplayFormats.Date)</div>
+                        </div>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => Revoke(i))">Revoke</MudButton>
+                    </div>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private TeamVm? _vm;
+    private bool _isAdmin;
+    private string[] _roleOptions = [TeamRoles.Staff];
+    private string _email = "";
+    private string _role = TeamRoles.Staff;
+    private string? _error;
+    private bool _busy;
+    private string? _lastLink;
+    private string? _lastEmail;
+
+    private string Summary => _vm is null ? ""
+        : $"{_vm.Members.Count(m => m.IsActive)} active · {_vm.Invites.Count} pending invite{(_vm.Invites.Count == 1 ? "" : "s")}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+            _isAdmin = (await AuthState).User.IsInRole(TeamRoles.Admin);
+        // Managers may only invite Staff (also enforced server-side).
+        _roleOptions = _isAdmin ? [TeamRoles.Staff, TeamRoles.Manager, TeamRoles.Admin] : [TeamRoles.Staff];
+        await Load();
+    }
+
+    private async Task Load() => _vm = await Sender.Send(new GetTeamQuery());
+
+    private async Task Invite()
+    {
+        _busy = true;
+        _error = null;
+        var r = await Sender.TrySend(new InviteUserCommand(_email, _role));
+        _busy = false;
+        if (!r.IsSuccess) { _error = r.Error.Message; return; }
+
+        _lastEmail = r.Value!.Email;
+        _lastLink = Nav.ToAbsoluteUri($"invite/{r.Value.Token}").ToString();
+        _email = "";
+        await Load();
+        await Copy();
+    }
+
+    private async Task Copy()
+    {
+        if (_lastLink is null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _lastLink);
+            Snackbar.Add("Invite link copied", Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add("Copy the link from the box above.", Severity.Info);
+        }
+    }
+
+    private async Task Revoke(PendingInvite invite)
+    {
+        var r = await Sender.TrySend(new RevokeInviteCommand(invite.Id));
+        Snackbar.Add(r.IsSuccess ? $"Invite for {invite.Email} revoked" : r.Error.Message,
+                     r.IsSuccess ? Severity.Success : Severity.Warning);
+        await Load();
+    }
+
+    private async Task ToggleActive(TeamMember member)
+    {
+        var r = await Sender.TrySend(new SetMemberActiveCommand(member.Id, !member.IsActive));
+        Snackbar.Add(r.IsSuccess ? $"{member.Name} {(member.IsActive ? "deactivated" : "reactivated")}" : r.Error.Message,
+                     r.IsSuccess ? Severity.Success : Severity.Warning);
+        await Load();
+    }
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : (parts.Length == 1 ? parts[0][..1] : $"{parts[0][0]}{parts[^1][0]}").ToUpperInvariant();
+    }
+}

@@ -1,11 +1,17 @@
 @inherits LayoutComponentBase
+@using Bassign.Application.Organizations.GetOrganization
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
+@inject IUiSender Sender
 
-<MudThemeProvider Theme="BassignTheme.Build()" IsDarkMode="false" />
+<MudThemeProvider Theme="_theme" IsDarkMode="false" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
+
+<HeadContent>
+    <style>@_brandCss</style>
+</HeadContent>
 
 <MudLayout>
     <MudAppBar Elevation="0" Color="Color.Transparent" Dense="true">
@@ -30,7 +36,8 @@
 
     <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Never" Variant="@DrawerVariant.Responsive">
         <div class="ba-brand">
-            <img src="logo.svg" alt="Bassign" height="24" />
+            <span class="ba-orgmark">@_initial</span>
+            <span class="ba-orgname">@_orgName</span>
         </div>
         <AuthorizeView Roles="Admin,Manager">
             <div class="ba-newtask">
@@ -50,6 +57,19 @@
 
 @code {
     private bool _drawerOpen = true;
+    private MudTheme _theme = BassignTheme.Build();
+    private string _orgName = "Bassign";
+    private string _initial = "B";
+    private string _brandCss = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var org = await Sender.Send(new GetOrganizationQuery());
+        _orgName = org.Name;
+        _initial = org.Name.Trim() is { Length: > 0 } n ? n[..1].ToUpperInvariant() : "B";
+        _theme = BassignTheme.Build(org.AccentHex);
+        _brandCss = $":root{{--ba-accent:{org.AccentHex};--ba-accent-600:{BrandColors.Shade(org.AccentHex, 0.15)};--ba-accent-tint:{BrandColors.Tint(org.AccentHex, 0.90)};}}";
+    }
 
     private async Task NewTask()
     {

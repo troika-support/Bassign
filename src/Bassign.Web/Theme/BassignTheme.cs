@@ -12,7 +12,7 @@ namespace Bassign.Web.Theme;
 // <MudThemeProvider Theme="@theme" />.
 public static class BassignTheme
 {
-    public static MudTheme Build() => new()
+    private static MudTheme Base() => new()
     {
         PaletteLight = new PaletteLight
         {
@@ -66,4 +66,13 @@ public static class BassignTheme
             Button = new ButtonTypography { FontWeight = "500", TextTransform = "none" },
         },
     };
+
+    /// <summary>The theme with the organization's accent applied (falls back to the default indigo).</summary>
+    public static MudTheme Build(string? accentHex = null)
+    {
+        var theme = Base();
+        if (!string.IsNullOrWhiteSpace(accentHex))
+            theme.PaletteLight.Primary = accentHex;
+        return theme;
+    }
 }

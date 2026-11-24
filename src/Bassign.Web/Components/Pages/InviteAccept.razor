@@ -1,0 +1,64 @@
+@page "/invite/{Token}"
+@layout Bassign.Web.Components.Layout.AuthLayout
+@attribute [AllowAnonymous]
+@using Bassign.Application.Teams.GetInvite
+@inject IUiSender Sender
+
+<PageTitle>Join · Bassign</PageTitle>
+
+<div class="ba-card pa-8" style="width:100%; max-width:420px;">
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+    }
+    else if (_preview is null)
+    {
+        <h1 style="font-size:1.25rem; font-weight:600; margin:0 0 8px;">This invite can't be used</h1>
+        <p class="ba-page-sub" style="margin-bottom:16px;">@_problem</p>
+        <a href="/sign-in" style="color:var(--ba-accent); font-weight:500;">Go to sign in</a>
+    }
+    else
+    {
+        <div style="text-align:center; margin-bottom:20px;">
+            <span class="ba-orgmark ba-orgmark--lg">@_preview.OrganizationName.Trim()[..1].ToUpperInvariant()</span>
+            <h1 style="font-size:1.35rem; font-weight:600; margin:14px 0 4px;">Join @_preview.OrganizationName</h1>
+            <p class="ba-page-sub" style="margin:0;">You've been invited as <b>@_preview.Role</b> · @_preview.Email</p>
+        </div>
+
+        @if (Error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@Error</MudAlert>
+        }
+
+        <form method="post" action="/account/accept-invite" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="token" value="@Token" />
+
+            <label class="ba-label" for="displayName">Your name</label>
+            <input class="ba-input" id="displayName" name="displayName" required maxlength="100" autocomplete="name" />
+
+            <label class="ba-label" for="password">Choose a password</label>
+            <input class="ba-input" id="password" name="password" type="password" required minlength="8" autocomplete="new-password" />
+            <p class="ba-hint">At least 8 characters, with upper and lower case, a number and a symbol.</p>
+
+            <button class="ba-submit" type="submit">Accept invite</button>
+        </form>
+    }
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    private InvitePreview? _preview;
+    private string? _problem;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Sender.Send(new GetInviteQuery(Token));
+        if (r.IsSuccess) _preview = r.Value;
+        else _problem = r.Error.Message;
+        _loading = false;
+    }
+}

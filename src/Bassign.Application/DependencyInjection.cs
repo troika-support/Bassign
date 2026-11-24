@@ -1,4 +1,5 @@
 using Bassign.Application.Common.Behaviors;
+using Bassign.Application.Tasks;
 using FluentValidation;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,8 @@ public static class DependencyInjection
         // Order = execution order: validation (outermost, fails fast) then audit (after the handler).
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AuditBehavior<,>));
+
+        services.AddScoped<ITaskAccess, TaskAccess>();
 
         return services;
     }

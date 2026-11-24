@@ -1,0 +1,270 @@
+@page "/"
+@implements IDisposable
+@inject FieldSession Session
+@inject ITaskStore Store
+@inject SyncService Sync
+@inject SyncScheduler Scheduler
+@inject IProofCamera Camera
+@inject LocalDb LocalDb
+@inject BrandingService Branding
+@inject NavigationManager Nav
+
+<header class="ba-field__head">
+    <div>
+        <p class="ba-field__eyebrow">@DateTime.Now.ToString("dddd d MMM")</p>
+        <h1 class="ba-field__hello">@Greeting</h1>
+    </div>
+    <div class="ba-field__head-actions">
+        <button type="button" class="ba-field__sync" @onclick="SyncNowAsync" disabled="@_syncing" aria-label="Sync now">
+            <SyncBadge Text="@BadgeText" />
+            <svg class="ba-field__sync-icon @(_syncing ? "ba-spin" : "")" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.74 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+            </svg>
+        </button>
+        @if (_user is not null)
+        {
+            <button type="button" class="ba-avatar-btn" @onclick="OpenAccount"
+                    aria-label="Account: @_user.DisplayName" aria-haspopup="dialog" aria-expanded="@(_accountOpen ? "true" : "false")">
+                @Initials(_user.DisplayName)
+            </button>
+        }
+    </div>
+</header>
+
+@if (_flash is not null)
+{
+    <p class="ba-flash" role="status">@_flash</p>
+}
+
+@if (_tasks is null)
+{
+    <p class="ba-empty__hint">Loading your tasks…</p>
+}
+else if (_tasks.Count == 0)
+{
+    <div class="ba-empty ba-card">
+        <p class="ba-empty__title">You're all caught up</p>
+        <p class="ba-empty__hint">New tasks will appear here.</p>
+    </div>
+}
+else
+{
+    var current = Current;
+    <FieldTaskCard Title="@current.Title" Detail="@current.Detail" Due="@current.DueUtc" Status="@current.Status"
+                   Pending="@current.Pending" RequiresProofPhoto="@current.RequiresProofPhoto" Notice="@current.Notice"
+                   Busy="@_busy"
+                   OnAccept="@(() => AcceptAsync(current))"
+                   OnDecline="@(() => DeclineAsync(current))"
+                   OnComplete="@(() => CompleteAsync(current))" />
+
+    @if (_tasks.Count > 1)
+    {
+        <h2 class="ba-field__section">Up next · @(_tasks.Count - 1)</h2>
+        <ul class="ba-field__list">
+            @foreach (var t in _tasks.Where(other => other.Id != current.Id))
+            {
+                <li>
+                    <button type="button" class="ba-field__row" @onclick="@(() => _focused = t.Id)">
+                        <span class="ba-field__row-title">@t.Title</span>
+                        @if (t.Pending) { <span class="ba-dot" title="Pending sync"></span> }
+                        <span class="ba-field__row-meta">@RowMeta(t)</span>
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@if (_accountOpen && _user is not null)
+{
+    <div class="ba-sheet-backdrop" @onclick="CloseAccount"></div>
+    <section class="ba-sheet" role="dialog" aria-modal="true" aria-labelledby="account-title">
+        <div class="ba-sheet__grip" aria-hidden="true"></div>
+        <div class="ba-sheet__who">
+            <span class="ba-avatar-btn ba-avatar-btn--lg" aria-hidden="true">@Initials(_user.DisplayName)</span>
+            <div>
+                <h2 class="ba-sheet__name" id="account-title">@_user.DisplayName</h2>
+                <p class="ba-sheet__meta">@(_user.Roles.FirstOrDefault() ?? "Staff") · @Branding.Name</p>
+                @if (!string.IsNullOrEmpty(_email))
+                {
+                    <p class="ba-sheet__meta">@_email</p>
+                }
+            </div>
+        </div>
+
+        <div class="ba-sheet__row">
+            <span>@SyncSummary</span>
+            <button type="button" class="ba-link" @onclick="SyncNowAsync" disabled="@_syncing">@(_syncing ? "Syncing…" : "Sync now")</button>
+        </div>
+
+        @if (_confirmSignOut)
+        {
+            <p class="ba-sheet__warn" role="alert">
+                @_pending change@(_pending == 1 ? " hasn't" : "s haven't") synced yet. Signing out removes
+                @(_pending == 1 ? "it" : "them") from this phone.
+            </p>
+        }
+        <button type="button" class="ba-sheet__signout" @onclick="SignOutAsync">
+            @(_confirmSignOut ? "Sign out anyway" : "Sign out")
+        </button>
+        <button type="button" class="ba-sheet__close" @onclick="CloseAccount">Close</button>
+    </section>
+}
+
+@code {
+    private const string LastUserKey = "bassign.lastUser";
+
+    private SessionUser? _user;
+    private string? _email;
+    private IReadOnlyList<FieldTask>? _tasks;
+    private Guid? _focused;
+    private int _pending;
+    private bool _busy;
+    private bool _syncing;
+    private bool _accountOpen;
+    private bool _confirmSignOut;
+    private string? _flash;
+
+    private FieldTask Current => _tasks!.FirstOrDefault(t => t.Id == _focused) ?? _tasks![0];
+
+    private string Greeting => _user is null ? "My day" : $"Hi, {_user.DisplayName.Split(' ')[0]}";
+
+    private string? BadgeText =>
+        _pending > 0 ? $"Pending {_pending}"
+        : Sync.LastState == SyncState.Offline ? "Offline"
+        : Sync.LastSyncedAt is { } at ? $"Synced {at.ToLocalTime():HH:mm}"
+        : null;
+
+    private string SyncSummary =>
+        _pending > 0 ? $"{_pending} change{(_pending == 1 ? "" : "s")} waiting to sync"
+        : Sync.LastSyncedAt is { } at ? $"Last synced {at.ToLocalTime():HH:mm}"
+        : "Not synced yet";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Session.GetUserAsync();
+        if (_user is null)
+        {
+            Nav.NavigateTo("/sign-in", replace: true);
+            return;
+        }
+
+        _email = Preferences.Default.Get(LastUserKey, "");
+        Store.Changed += OnDataChanged;
+        Sync.Changed += OnDataChanged;
+        Session.SignedOut += OnSignedOut;
+        await ReloadAsync();
+        Scheduler.TriggerNow();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _tasks = await Store.GetOpenTasksAsync();
+        _pending = await Store.PendingCountAsync();
+        if (_pending == 0) _confirmSignOut = false;
+    }
+
+    // Store/sync events arrive off the UI thread.
+    private void OnDataChanged() => _ = InvokeAsync(async () =>
+    {
+        await ReloadAsync();
+        StateHasChanged();
+    });
+
+    private void OnSignedOut() => _ = InvokeAsync(() => Nav.NavigateTo("/sign-in", replace: true));
+
+    private void OpenAccount() => _accountOpen = true;
+
+    private void CloseAccount()
+    {
+        _accountOpen = false;
+        _confirmSignOut = false;
+    }
+
+    private Task AcceptAsync(FieldTask task) =>
+        RunAsync(() => Store.AcceptAsync(task.Id), $"Accepted{DueText(task)}.");
+
+    private Task DeclineAsync(FieldTask task) =>
+        RunAsync(() => Store.DeclineAsync(task.Id), "Declined — your manager will reassign it.");
+
+    private async Task CompleteAsync(FieldTask task)
+    {
+        string? photo = null;
+        if (task.RequiresProofPhoto)
+        {
+            _busy = true;
+            photo = await Camera.CaptureAsync();
+            _busy = false;
+            if (photo is null)
+            {
+                _flash = "No photo taken — this task needs one to finish.";
+                return;
+            }
+        }
+        await RunAsync(() => Store.CompleteAsync(task.Id, photo), "Marked done — thanks.");
+    }
+
+    private async Task RunAsync(Func<Task<FieldResult>> action, string success)
+    {
+        _busy = true;
+        _flash = null;
+        try
+        {
+            var result = await action();
+            _flash = result.Succeeded ? success : result.Message;
+            if (result.Succeeded) _focused = null;
+        }
+        finally
+        {
+            _busy = false;
+        }
+        await ReloadAsync();
+    }
+
+    private async Task SyncNowAsync()
+    {
+        _syncing = true;
+        var report = await Sync.SyncAsync();
+        _syncing = false;
+        _flash = report.State switch
+        {
+            SyncState.Offline => "You're offline — your changes are saved and will sync when you're back.",
+            SyncState.Synced => null,
+            _ => _flash
+        };
+        await ReloadAsync();
+    }
+
+    private async Task SignOutAsync()
+    {
+        if (_pending > 0 && !_confirmSignOut)
+        {
+            _confirmSignOut = true;
+            return;
+        }
+        _accountOpen = false;
+        await LocalDb.ResetAsync();       // the next person must never see these tasks
+        await Session.SignOutAsync();     // raises SignedOut → sign-in page
+    }
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : (parts.Length == 1 ? parts[0][..1] : $"{parts[0][0]}{parts[^1][0]}").ToUpperInvariant();
+    }
+
+    private static string DueText(FieldTask t) =>
+        t.DueUtc is { } d ? $" — due {d.ToLocalTime():ddd d MMM}" : "";
+
+    private static string RowMeta(FieldTask t) =>
+        t.Status == "Accepted" ? "In progress"
+        : t.DueUtc is { } d ? d.ToLocalTime().ToString("ddd d MMM")
+        : "To do";
+
+    public void Dispose()
+    {
+        Store.Changed -= OnDataChanged;
+        Sync.Changed -= OnDataChanged;
+        Session.SignedOut -= OnSignedOut;
+    }
+}

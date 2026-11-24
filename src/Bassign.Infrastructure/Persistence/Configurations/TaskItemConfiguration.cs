@@ -6,6 +6,10 @@ namespace Bassign.Infrastructure.Persistence.Configurations;
 
 public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
 {
+    /// <summary>Shadow SQL Server rowversion: bumps on every insert/update. Drives delta sync and
+    /// optimistic concurrency without touching the domain model.</summary>
+    public const string SyncVersion = "SyncVersion";
+
     public void Configure(EntityTypeBuilder<TaskItem> builder)
     {
         builder.ToTable("Tasks");
@@ -17,6 +21,8 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         builder.Property(t => t.AssigneeId).HasMaxLength(64);
         builder.Property(t => t.CreatedById).HasMaxLength(64).IsRequired();
         builder.Property(t => t.ProofPhotoRef).HasMaxLength(512);
+
+        builder.Property<long>(SyncVersion).IsRowVersion().HasConversion<byte[]>();
 
         // Domain events are not persisted.
         builder.Ignore(t => t.DomainEvents);

@@ -1,6 +1,6 @@
 @using Bassign.Application.Tasks.GetAssignableUsers
 @using Bassign.Application.Tasks.AssignTask
-@inject Mediator.ISender Sender
+@inject IUiSender Sender
 
 <MudDialog>
     <DialogContent>
@@ -51,7 +51,7 @@
         if (string.IsNullOrEmpty(_selected)) return;
         _busy = true;
         foreach (var id in TaskIds)
-            await Sender.Send(new AssignTaskCommand(id, _selected));
+            await Sender.TrySend(new AssignTaskCommand(id, _selected));
         MudDialog.Close(DialogResult.Ok(true));
     }
 }

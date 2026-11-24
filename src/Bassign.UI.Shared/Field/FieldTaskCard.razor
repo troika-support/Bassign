@@ -1,0 +1,67 @@
+@* One task, full width, big actions (design-system §8.10). Calm and single-focus.
+   Purely presentational: the host decides what Accept / Decline / Mark done do. *@
+<article class="ba-task ba-card" aria-labelledby="task-title">
+    <header class="ba-task__head">
+        <h2 class="ba-task__title" id="task-title">@Title</h2>
+        @if (Pending)
+        {
+            <span class="ba-sync" role="status" title="Saved on this phone — will sync automatically">Pending</span>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Detail))
+    {
+        <p class="ba-task__detail">@Detail</p>
+    }
+    @if (Due is { } due)
+    {
+        <p class="ba-task__due @(IsOverdue ? "is-overdue" : "")">
+            @(IsOverdue ? "Overdue · was due " : "Due ")@FormatDue(due)
+        </p>
+    }
+    @if (RequiresProofPhoto && Status == "Accepted")
+    {
+        <p class="ba-task__hint">Needs a photo to finish.</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(Notice))
+    {
+        <p class="ba-task__notice" role="alert">@Notice</p>
+    }
+
+    <div class="ba-actions">
+        @if (Status == "Todo")
+        {
+            <button type="button" class="ba-btn ba-btn--primary ba-animate" disabled="@Busy" @onclick="OnAccept">Accept</button>
+            <button type="button" class="ba-btn ba-btn--ghost ba-animate" disabled="@Busy" @onclick="OnDecline">Decline</button>
+        }
+        else if (Status == "Accepted")
+        {
+            <button type="button" class="ba-btn ba-btn--primary ba-animate" disabled="@Busy" @onclick="OnComplete">
+                @(RequiresProofPhoto ? "Add photo & mark done" : "Mark done")
+            </button>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Detail { get; set; }
+    [Parameter] public DateTimeOffset? Due { get; set; }
+    [Parameter, EditorRequired] public string Status { get; set; } = "Todo";
+    [Parameter] public bool Pending { get; set; }
+    [Parameter] public bool RequiresProofPhoto { get; set; }
+    [Parameter] public string? Notice { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnAccept { get; set; }
+    [Parameter] public EventCallback OnDecline { get; set; }
+    [Parameter] public EventCallback OnComplete { get; set; }
+
+    // A due date set without a time is stored as 23:59 → show just the date.
+    private static string FormatDue(DateTimeOffset due)
+    {
+        var local = due.ToLocalTime();
+        return local is { Hour: 23, Minute: 59 } ? local.ToString("ddd d MMM") : local.ToString("ddd d MMM, h:mm tt");
+    }
+
+    private bool IsOverdue => Due is { } d && d < DateTimeOffset.UtcNow && Status is "Todo" or "Accepted";
+}

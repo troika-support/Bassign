@@ -13,5 +13,6 @@
     <ProjectReference Include="..\..\src\Bassign.Domain\Bassign.Domain.csproj" />
     <ProjectReference Include="..\..\src\Bassign.Application\Bassign.Application.csproj" />
     <ProjectReference Include="..\..\src\Bassign.Infrastructure\Bassign.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Bassign.Field.Core\Bassign.Field.Core.csproj" />
   </ItemGroup>
 </Project>

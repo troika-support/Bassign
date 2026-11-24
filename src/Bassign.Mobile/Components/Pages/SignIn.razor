@@ -1,0 +1,76 @@
+@page "/sign-in"
+@implements IDisposable
+@inject FieldSession Session
+@inject LocalDb LocalDb
+@inject SyncScheduler Scheduler
+@inject BrandingService Branding
+@inject NavigationManager Nav
+
+<div class="ba-signin-wrap">
+    <div class="ba-card ba-signin">
+        <span class="ba-orgmark" aria-hidden="true">@Branding.Initial</span>
+        <h1>Sign in to @Branding.Name</h1>
+        <p class="ba-page-sub">Use the email your manager invited.</p>
+
+        @if (_error is not null)
+        {
+            <p class="ba-task__notice" role="alert">@_error</p>
+        }
+
+        <form @onsubmit="SignInAsync">
+            <label class="ba-label" for="email">Email</label>
+            <input class="ba-input" id="email" type="email" autocomplete="username" inputmode="email" required @bind="_email" />
+
+            <label class="ba-label" for="password">Password</label>
+            <div class="ba-password">
+                <input class="ba-input" id="password" type="@(_showPassword ? "text" : "password")"
+                       autocomplete="current-password" required @bind="_password" />
+                <button type="button" class="ba-password__toggle" @onclick="() => _showPassword = !_showPassword"
+                        aria-label="@(_showPassword ? "Hide password" : "Show password")"
+                        aria-pressed="@(_showPassword ? "true" : "false")">@(_showPassword ? "Hide" : "Show")</button>
+            </div>
+
+            <button class="ba-submit" type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+        </form>
+    </div>
+</div>
+
+@code {
+    private const string LastUserKey = "bassign.lastUser";
+
+    private string _email = "";
+    private string _password = "";
+    private string? _error;
+    private bool _busy;
+    private bool _showPassword;
+
+    protected override void OnInitialized() => Branding.Changed += OnBrandingChanged;
+    private void OnBrandingChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task SignInAsync()
+    {
+        _busy = true;
+        _error = null;
+        var result = await Session.SignInAsync(_email, _password);
+        _busy = false;
+
+        if (!result.Succeeded)
+        {
+            _error = result.Message;
+            return;
+        }
+
+        // A different person on this phone: start from a clean local store.
+        var email = _email.Trim();
+        if (!string.Equals(Preferences.Default.Get(LastUserKey, ""), email, StringComparison.OrdinalIgnoreCase))
+            await LocalDb.ResetAsync();
+        Preferences.Default.Set(LastUserKey, email);
+
+        _password = "";
+        _ = Branding.RefreshAsync();
+        Scheduler.TriggerNow();
+        Nav.NavigateTo("/", replace: true);
+    }
+
+    public void Dispose() => Branding.Changed -= OnBrandingChanged;
+}

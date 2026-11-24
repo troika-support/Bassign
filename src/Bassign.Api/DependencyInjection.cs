@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.AddEndpointsApiExplorer();
         services.AddProblemDetails();
         services.AddExceptionHandler<ValidationExceptionHandler>();
+        services.AddExceptionHandler<ConcurrencyExceptionHandler>();
         return services;
     }
 }

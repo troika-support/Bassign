@@ -1,0 +1,223 @@
+@page "/setup"
+@attribute [Authorize(Roles = "Admin")]
+@using Bassign.Application.Organizations.GetOrganization
+@using Bassign.Application.Organizations.SaveOrganization
+@using Bassign.Application.Teams.InviteUser
+@using Bassign.Domain.Common
+@using Bassign.Domain.Teams
+@inject IUiSender Sender
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Set up · Bassign</PageTitle>
+
+<h1 class="ba-page-title">Set up your workspace</h1>
+<p class="ba-page-sub">Three quick steps — you can change all of this later in Settings.</p>
+
+<div class="ba-steps" role="list">
+    @foreach (var (n, label) in Steps)
+    {
+        <div role="listitem" class="ba-step @StepClass(n)" aria-current="@(n == _step ? "step" : null)">
+            <span class="ba-step__num">@(n < _step ? "✓" : n.ToString())</span>@label
+        </div>
+    }
+</div>
+
+@if (_step == 1)
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <div class="ba-card pa-5">
+                <MudTextField @bind-Value="_name" Label="Organization name" Variant="Variant.Outlined" Immediate="true" Class="mb-4"
+                              Required="true" RequiredError="Enter your organization's name."
+                              HelperText="Shown in the sidebar, on sign-in and in invites." />
+
+                <p class="ba-label">Brand colour</p>
+                <div class="ba-swatches">
+                    @foreach (var (hex, label) in Swatches)
+                    {
+                        <button type="button" class="ba-swatch @(Same(hex) ? "ba-swatch--selected" : "")" style="background:@hex"
+                                title="@label" aria-label="@label" aria-pressed="@(Same(hex) ? "true" : "false")"
+                                @onclick="@(() => _accent = hex)"></button>
+                    }
+                </div>
+                <MudTextField @bind-Value="_accent" Label="Or a custom colour (#RRGGBB)" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Immediate="true" />
+                <p class="ba-hint" style="margin:6px 0 16px; color:@(AccentOk ? "var(--ba-success)" : "var(--ba-danger)");">@ContrastMessage</p>
+
+                <MudSelect T="string" @bind-Value="_timeZone" Label="Time zone" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4">
+                    @foreach (var tz in TimeZones)
+                    {
+                        <MudSelectItem T="string" Value="@tz">@tz</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_error</MudAlert>
+                }
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="@(_busy || !AccentOk || string.IsNullOrWhiteSpace(_name))" OnClick="SaveOrganization">Continue</MudButton>
+            </div>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <p class="ba-label">Live preview</p>
+            <div class="ba-preview" aria-hidden="true">
+                <div class="ba-preview__bar">
+                    <span class="ba-orgmark" style="background:@PreviewAccent">@PreviewInitial</span>
+                    <span class="ba-orgname">@(string.IsNullOrWhiteSpace(_name) ? "Your organization" : _name)</span>
+                    <span class="ba-preview__btn" style="background:@PreviewAccent">+ New task</span>
+                </div>
+                <div class="ba-preview__body">
+                    <div class="ba-preview__nav" style="background:@BrandColors.Tint(PreviewAccent, 0.90); color:@PreviewAccent; font-weight:500;">Dashboard</div>
+                    <div class="ba-preview__nav">Tasks</div>
+                    <div class="ba-preview__nav">Team</div>
+                </div>
+            </div>
+        </MudItem>
+    </MudGrid>
+}
+else if (_step == 2)
+{
+    <div class="ba-card pa-5" style="max-width:680px;">
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Invite your team</MudText>
+        <p class="ba-page-sub" style="margin-bottom:16px;">Each person gets a one-time link to join. You can skip this and invite people later from Team.</p>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <div style="flex:1; min-width:220px;">
+                <MudTextField @bind-Value="_inviteEmail" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              InputType="InputType.Email" Immediate="true" />
+            </div>
+            <div style="width:150px;">
+                <MudSelect T="string" @bind-Value="_inviteRole" Label="Role" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var r in TeamRoles.All)
+                    {
+                        <MudSelectItem T="string" Value="@r">@r</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       Disabled="@(_busy || string.IsNullOrWhiteSpace(_inviteEmail))" OnClick="SendInvite">Send invite</MudButton>
+        </div>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+
+        @foreach (var s in _sent)
+        {
+            <div class="ba-workload">
+                <span class="ba-avatar">@s.Email[..1].ToUpperInvariant()</span>
+                <div style="flex:1; min-width:0;">
+                    <div class="ba-workload__name">@s.Email</div>
+                    <div class="ba-workload__meta">@s.Role · expires @s.ExpiresAt.LocalDateTime.ToString(DisplayFormats.Date)</div>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small"
+                               aria-label="Copy invite link" OnClick="@(() => Copy(s.Link))" />
+            </div>
+        }
+
+        <div style="margin-top:20px;">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => _step = 3)">
+                @(_sent.Count == 0 ? "Skip for now" : "Continue")
+            </MudButton>
+        </div>
+    </div>
+}
+else
+{
+    <div class="ba-card pa-8" style="max-width:520px; text-align:center;">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Style="color:var(--ba-success); font-size:3rem;" />
+        <h2 style="font-size:1.4rem; font-weight:600; margin:12px 0 4px;">You're set</h2>
+        <p class="ba-page-sub">@_name is ready. Create your first task from the dashboard.</p>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Finish">Go to dashboard</MudButton>
+    </div>
+}
+
+@code {
+    private static readonly (int N, string Label)[] Steps = [(1, "Organization"), (2, "Team"), (3, "Done")];
+
+    // Every swatch passes white-text contrast >= 4.5:1.
+    private static readonly (string Hex, string Label)[] Swatches =
+    [
+        ("#4F46E5", "Indigo"), ("#1D4ED8", "Blue"), ("#0F766E", "Teal"), ("#15803D", "Green"),
+        ("#B91C1C", "Red"), ("#C2410C", "Orange"), ("#7C3AED", "Violet"), ("#334155", "Slate")
+    ];
+
+    private static readonly string[] TimeZones =
+        ["Africa/Harare", "Africa/Johannesburg", "Africa/Lusaka", "Africa/Maputo", "Africa/Nairobi", "UTC"];
+
+    private int _step = 1;
+    private string _name = "";
+    private string _accent = "#4F46E5";
+    private string _timeZone = "Africa/Harare";
+    private string _inviteEmail = "";
+    private string _inviteRole = TeamRoles.Staff;
+    private readonly List<SentInvite> _sent = [];
+    private string? _error;
+    private bool _busy;
+
+    private sealed record SentInvite(string Email, string Role, DateTimeOffset ExpiresAt, string Link);
+
+    private bool AccentOk => ColorContrast.IsHex(_accent) && ColorContrast.WithWhite(_accent) >= ColorContrast.MinButtonContrast;
+    private string PreviewAccent => AccentOk ? _accent : "#4F46E5";
+    private string PreviewInitial => _name.Trim() is { Length: > 0 } n ? n[..1].ToUpperInvariant() : "Y";
+    private bool Same(string hex) => string.Equals(hex, _accent, StringComparison.OrdinalIgnoreCase);
+    private string StepClass(int n) => n == _step ? "ba-step--active" : n < _step ? "ba-step--done" : "";
+
+    private string ContrastMessage =>
+        !ColorContrast.IsHex(_accent) ? "Use a #RRGGBB colour, e.g. #4F46E5."
+        : AccentOk ? $"White text on this colour: {ColorContrast.WithWhite(_accent):0.0}:1 — readable."
+        : $"White text on this colour: {ColorContrast.WithWhite(_accent):0.0}:1 — too light, pick a darker shade.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var org = await Sender.Send(new GetOrganizationQuery());
+        _name = org.SetupCompleted ? org.Name : "";
+        _accent = org.AccentHex;
+        _timeZone = org.TimeZoneId;
+    }
+
+    private async Task SaveOrganization()
+    {
+        _busy = true;
+        _error = null;
+        var r = await Sender.TrySend(new SaveOrganizationCommand(_name, _accent, _timeZone));
+        _busy = false;
+        if (r.IsSuccess) _step = 2;
+        else _error = r.Error.Message;
+    }
+
+    private async Task SendInvite()
+    {
+        _busy = true;
+        _error = null;
+        var r = await Sender.TrySend(new InviteUserCommand(_inviteEmail, _inviteRole));
+        _busy = false;
+        if (!r.IsSuccess) { _error = r.Error.Message; return; }
+
+        var link = Nav.ToAbsoluteUri($"invite/{r.Value!.Token}").ToString();
+        _sent.Add(new SentInvite(r.Value.Email, r.Value.Role, r.Value.ExpiresAt, link));
+        _inviteEmail = "";
+        await Copy(link);
+    }
+
+    private async Task Copy(string link)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", link);
+            Snackbar.Add("Invite link copied", Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add(link, Severity.Info);
+        }
+    }
+
+    // Full reload so the new accent + name apply everywhere.
+    private void Finish() => Nav.NavigateTo("/", forceLoad: true);
+}

@@ -29,6 +29,11 @@ public class TaskHandlerTests
 
     private sealed class FakeCurrentUser(string id) : ICurrentUser { public string UserId => id; }
 
+    private sealed class FakeTaskAccess(bool allow) : ITaskAccess
+    {
+        public Task<bool> CanWorkOnAsync(TaskItem task, CancellationToken ct = default) => Task.FromResult(allow);
+    }
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -66,7 +71,7 @@ public class TaskHandlerTests
     [Fact]
     public async Task Complete_returns_not_found_when_task_missing()
     {
-        var handler = new CompleteTaskHandler(new FakeTaskRepository(), new FakeUnitOfWork(), TimeProvider.System);
+        var handler = new CompleteTaskHandler(new FakeTaskRepository(), new FakeUnitOfWork(), TimeProvider.System, new FakeTaskAccess(allow: true));
         var result = await handler.Handle(new CompleteTaskCommand(Guid.NewGuid(), null), Ct);
 
         Assert.False(result.IsSuccess);
@@ -82,10 +87,28 @@ public class TaskHandlerTests
         task.Complete(DateTimeOffset.UtcNow);
         repo.Add(task);
 
-        var handler = new AcceptTaskHandler(repo, new FakeUnitOfWork());
+        var handler = new AcceptTaskHandler(repo, new FakeUnitOfWork(), new FakeTaskAccess(allow: true));
         var result = await handler.Handle(new AcceptTaskCommand(task.Id), Ct);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("task.invalid_state", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Staff_cannot_complete_someone_elses_task()
+    {
+        var repo = new FakeTaskRepository();
+        var task = TaskItem.Create("T", "mgr-1", DateTimeOffset.UtcNow);
+        task.AssignTo("staff-2");
+        task.Accept();
+        repo.Add(task);
+        var uow = new FakeUnitOfWork();
+
+        var handler = new CompleteTaskHandler(repo, uow, TimeProvider.System, new FakeTaskAccess(allow: false));
+        var result = await handler.Handle(new CompleteTaskCommand(task.Id, null), Ct);
+
+        Assert.Equal("task.forbidden", result.Error.Code);
+        Assert.Equal(TaskStatus.Accepted, task.Status);
+        Assert.Equal(0, uow.Saves);
     }
 }

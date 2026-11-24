@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The field app's offline engine: local SQLite store, outbox, sync, token refresh.
+       Plain net10.0 (no MAUI) so it is unit-testable; the MAUI host supplies platform pieces. -->
+  <ItemGroup>
+    <PackageReference Include="sqlite-net-pcl" />
+  </ItemGroup>
+</Project>
