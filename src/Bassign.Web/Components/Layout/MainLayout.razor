@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
 
 <MudThemeProvider Theme="BassignTheme.Build()" IsDarkMode="false" />
 <MudPopoverProvider />
@@ -6,16 +8,18 @@
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="0" Color="Color.Surface" Class="border-b">
+    <MudAppBar Elevation="0" Color="Color.Transparent" Dense="true">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                       OnClick="@(() => _drawerOpen = !_drawerOpen)" aria-label="Toggle navigation" />
-        <img src="logo.svg" alt="Bassign" height="24" style="margin-left:8px" />
+                       OnClick="@(() => _drawerOpen = !_drawerOpen)" Class="d-flex d-md-none" aria-label="Toggle navigation" />
         <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Outlined.Notifications" Color="Color.Inherit" aria-label="Notifications" />
         <AuthorizeView>
-            <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight">
-                <MudText Class="px-4 py-2" Typo="Typo.body2">@context.User.Identity?.Name</MudText>
+            <MudMenu Icon="@Icons.Material.Outlined.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight">
+                <div class="px-4 py-2">
+                    <MudText Typo="Typo.body2">@context.User.Identity?.Name</MudText>
+                </div>
                 <MudDivider />
-                <form method="post" action="/account/logout">
+                <form method="post" action="/account/logout" data-enhance="false">
                     <AntiforgeryToken />
                     <MudButton ButtonType="ButtonType.Submit" FullWidth="true" Class="justify-start"
                                StartIcon="@Icons.Material.Filled.Logout">Sign out</MudButton>
@@ -24,7 +28,16 @@
         </AuthorizeView>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always" Variant="@DrawerVariant.Responsive">
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Never" Variant="@DrawerVariant.Responsive">
+        <div class="ba-brand">
+            <img src="logo.svg" alt="Bassign" height="24" />
+        </div>
+        <AuthorizeView Roles="Admin,Manager">
+            <div class="ba-newtask">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="NewTask">New task</MudButton>
+            </div>
+        </AuthorizeView>
         <NavMenu />
     </MudDrawer>
 
@@ -37,4 +50,10 @@
 
 @code {
     private bool _drawerOpen = true;
+
+    private async Task NewTask()
+    {
+        var dialog = await Dialogs.ShowAsync<NewTaskDialog>("New task");
+        if (!(await dialog.Result)!.Canceled) Nav.NavigateTo("/tasks", forceLoad: false);
+    }
 }

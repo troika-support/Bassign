@@ -16,4 +16,11 @@ public sealed class UserDirectory(AppDbContext db) : IUserDirectory
             .Where(u => userIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
     }
+
+    public async Task<IReadOnlyList<DirectoryUser>> ListActiveAsync(CancellationToken cancellationToken = default) =>
+        await db.Users
+            .Where(u => u.IsActive)
+            .OrderBy(u => u.DisplayName)
+            .Select(u => new DirectoryUser(u.Id, u.DisplayName))
+            .ToListAsync(cancellationToken);
 }

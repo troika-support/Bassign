@@ -1,0 +1,46 @@
+@using Bassign.Application.Tasks.UpdateTask
+@inject Mediator.ISender Sender
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_title" Label="Title" Required="true" Immediate="true" Class="mb-3" />
+        <MudTextField @bind-Value="_detail" Label="Detail" Lines="3" Class="mb-3" />
+        <MudDatePicker @bind-Date="_due" Label="Due date" Editable="true" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public TaskDto Task { get; set; } = default!;
+
+    private string _title = "";
+    private string? _detail;
+    private DateTime? _due;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        _title = Task.Title;
+        _detail = Task.Detail;
+        _due = Task.DueDate?.LocalDateTime;
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        _error = null;
+        DateTimeOffset? due = _due is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d, DateTimeKind.Utc)) : null;
+        var r = await Sender.Send(new UpdateTaskCommand(Task.Id, _title, _detail, due));
+        if (r.IsSuccess) MudDialog.Close(DialogResult.Ok(true));
+        else { _error = r.Error.Message; _busy = false; }
+    }
+}

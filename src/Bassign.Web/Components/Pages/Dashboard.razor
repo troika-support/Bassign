@@ -1,13 +1,9 @@
 @page "/"
 @attribute [Authorize]
-@rendermode InteractiveServer
 @using Bassign.Application.Dashboard
 @inject Mediator.ISender Sender
 
 <PageTitle>Workload · Bassign</PageTitle>
-
-<h1 class="ba-page-title">Workload</h1>
-<p class="ba-page-sub">Bassign · today</p>
 
 @if (_vm is null)
 {
@@ -15,37 +11,109 @@
 }
 else
 {
-    <MudGrid Class="mb-6">
-        <MetricCard Label="Overdue" Value="@_vm.Metrics.Overdue" Variant="overdue" />
-        <MetricCard Label="Due today" Value="@_vm.Metrics.DueToday" Variant="duetoday" />
-        <MetricCard Label="Unassigned" Value="@_vm.Metrics.Unassigned" Variant="" />
-        <MetricCard Label="On time (30d)" Value="@_vm.Metrics.OnTime30d" Variant="ontime" />
+    <h1 class="ba-page-title">@_greeting@(_firstName is null ? "" : $", {_firstName}")</h1>
+    <p class="ba-page-sub">@DateTime.Now.ToString("dddd d MMM") · @_vm.Metrics.OpenTasks open tasks</p>
+
+    <MudGrid Spacing="3" Class="mb-6">
+        <MetricCard Label="Open tasks" Value="@_vm.Metrics.OpenTasks" Icon="@Icons.Material.Outlined.Assignment"
+                    Sub="@($"{_vm.Metrics.InProgress} in progress")" />
+        <MetricCard Label="Overdue" Value="@_vm.Metrics.Overdue" Icon="@Icons.Material.Outlined.ErrorOutline"
+                    Variant="overdue" Sub="@(_vm.Metrics.Overdue > 0 ? "Needs attention" : "All on track")" SubAlert="@(_vm.Metrics.Overdue > 0)" />
+        <MetricCard Label="Due today" Value="@_vm.Metrics.DueToday" Icon="@Icons.Material.Outlined.Today" Variant="duetoday" />
+        <MetricCard Label="Unassigned" Value="@_vm.Metrics.Unassigned" Icon="@Icons.Material.Outlined.PersonOutline"
+                    Sub="@(_vm.Metrics.Unassigned > 0 ? "Need an owner" : null)" />
+        <MetricCard Label="Done this week" Value="@_vm.Metrics.DoneThisWeek" Icon="@Icons.Material.Outlined.CheckCircle" Variant="ontime" />
     </MudGrid>
 
-    <MudText Typo="Typo.h6" Class="mb-2">Team workload</MudText>
-    @if (_vm.Workload.Count == 0)
-    {
-        <p class="ba-empty__hint">No tasks yet — assign your first one.</p>
-    }
-    else
-    {
-        var max = _vm.Workload.Max(w => w.Active);
-        @foreach (var row in _vm.Workload)
-        {
-            <div class="ba-workload">
-                <span class="ba-workload__name" style="min-width:160px;">@row.Name</span>
-                <div class="ba-bar"><div class="ba-bar__fill" style="width:@(Pct(row.Active, max))%"></div></div>
-                <span class="ba-workload__meta">@row.Active active · @row.Overdue overdue</span>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <div class="ba-card pa-4" style="height:100%;">
+                <MudText Typo="Typo.subtitle1" Class="mb-1" Style="font-weight:600;">Open work</MudText>
+                <MudText Typo="Typo.caption" Class="mb-3" Style="color:var(--ba-muted);">@_vm.Metrics.OpenTasks open tasks</MudText>
+                @if (_donutSeries.Count > 0)
+                {
+                    <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+                        <MudChart T="double" ChartType="ChartType.Donut" Width="150px" Height="150px"
+                                  ChartSeries="_donutSeries" ChartLabels="_donutLabels" ChartOptions="_donutOptions" />
+                        <div>
+                            @foreach (var s in _vm.StatusMix)
+                            {
+                                <div style="display:flex; align-items:center; gap:8px; padding:3px 0;">
+                                    <span style="width:10px; height:10px; border-radius:3px; background:@ColorFor(s.Label);"></span>
+                                    <span style="min-width:90px;">@s.Label</span>
+                                    <b class="ba-metric">@s.Count</b>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <p class="ba-empty__hint">No open tasks right now.</p>
+                }
             </div>
-        }
-    }
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <div class="ba-card pa-4" style="height:100%;">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">Team workload</MudText>
+                @if (_vm.Workload.Count == 0)
+                {
+                    <p class="ba-empty__hint">No tasks yet — assign your first one.</p>
+                }
+                else
+                {
+                    var max = _vm.Workload.Max(w => w.Active);
+                    @foreach (var row in _vm.Workload)
+                    {
+                        <div class="ba-workload">
+                            <span class="ba-avatar">@Initials(row.Name)</span>
+                            <span class="ba-workload__name" style="min-width:140px;">@row.Name</span>
+                            <div class="ba-bar"><div class="ba-bar__fill" style="width:@(Pct(row.Active, max))%"></div></div>
+                            <span class="ba-workload__meta">@row.Active active · @row.Overdue overdue</span>
+                        </div>
+                    }
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
 }
 
 @code {
-    private DashboardVm? _vm;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    protected override async Task OnInitializedAsync() =>
+    private DashboardVm? _vm;
+    private string? _firstName;
+    private string _greeting = "Hello";
+    private List<ChartSeries<double>> _donutSeries = [];
+    private string[] _donutLabels = [];
+    private readonly DonutChartOptions _donutOptions = new() { ChartPalette = ["#2563EB", "#4F46E5", "#C01B1B"], ShowLegend = false };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _greeting = DateTime.Now.Hour switch { < 12 => "Good morning", < 18 => "Good afternoon", _ => "Good evening" };
+        if (AuthState is not null)
+        {
+            var user = (await AuthState).User;
+            _firstName = user.Identity?.Name?.Split(' ').FirstOrDefault();
+        }
+
         _vm = await Sender.Send(new GetDashboardQuery());
+        _donutLabels = _vm.StatusMix.Select(s => s.Label).ToArray();
+        _donutSeries = _vm.StatusMix.Count == 0 ? []
+            : [ new ChartSeries<double> { Name = "Open work", Data = _vm.StatusMix.Select(s => (double)s.Count).ToArray() } ];
+    }
+
+    private static string ColorFor(string label) => label switch
+    {
+        "To do" => "#2563EB", "In progress" => "#4F46E5", "Overdue" => "#C01B1B", _ => "#8A909E"
+    };
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : (parts.Length == 1 ? parts[0][..1] : $"{parts[0][0]}{parts[^1][0]}").ToUpperInvariant();
+    }
 
     private static int Pct(int value, int max) => max <= 0 ? 0 : (int)Math.Round(100.0 * value / max);
 }

@@ -9,10 +9,10 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" />
     <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
     <link rel="stylesheet" href="app.css" />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 <body>
-    <Routes />
+    <Routes @rendermode="InteractiveServer" />
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>

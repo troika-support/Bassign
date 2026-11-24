@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IAuditSink, AuditSink>();
+        services.AddScoped<IAuditTrail, AuditTrail>();
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddScoped<JwtTokenGenerator>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();

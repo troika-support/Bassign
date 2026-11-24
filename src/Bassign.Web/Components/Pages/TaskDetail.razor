@@ -1,0 +1,132 @@
+@page "/tasks/{Id:guid}"
+@attribute [Authorize]
+@using Bassign.Application.Tasks.GetTaskDetail
+@using Bassign.Application.Tasks.CompleteTask
+@inject Mediator.ISender Sender
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Task · Bassign</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else if (_vm is null)
+{
+    <h1 class="ba-page-title">Task not found</h1>
+    <MudLink Href="/tasks">Back to tasks</MudLink>
+}
+else
+{
+    var t = _vm.Task;
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <h1 class="ba-page-title" style="margin:0;">@t.Title</h1>
+        <StatusChip Status="@DisplayStatus(t)" />
+    </div>
+
+    <MudGrid Class="mt-2 mb-4">
+        <MudItem xs="12" md="6">
+            <p class="ba-metric__label">Assignee</p>
+            <p>@(_vm.AssigneeName ?? "Unassigned")</p>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <p class="ba-metric__label">@(t.CompletedAt is null ? "Due" : "Completed")</p>
+            <p>@(t.CompletedAt is { } c ? c.LocalDateTime.ToString(DisplayFormats.DateTime)
+                 : t.DueDate is { } d ? d.LocalDateTime.ToString(DisplayFormats.DateTime) : "No due date")</p>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <p class="ba-metric__label">Created by</p>
+            <p>@_vm.CreatedByName</p>
+        </MudItem>
+    </MudGrid>
+
+    @if (!string.IsNullOrWhiteSpace(t.Detail))
+    {
+        <MudText Class="mb-4">@t.Detail</MudText>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(t.ProofPhotoRef))
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">Proof-of-work photo attached (@t.ProofPhotoRef).</MudAlert>
+    }
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px;">
+        @if (t.Status == "Accepted")
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="MarkDone">Mark done</MudButton>
+        }
+        @if (t.Status is not ("Done" or "Declined"))
+        {
+            <AuthorizeView Roles="Admin,Manager" Context="auth">
+                <MudButton Variant="Variant.Outlined" OnClick="Reassign">Reassign</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="Edit">Edit</MudButton>
+            </AuthorizeView>
+        }
+    </div>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Activity</MudText>
+    <MudTimeline TimelinePosition="TimelinePosition.Start">
+        @foreach (var a in _vm.Activity)
+        {
+            <MudTimelineItem Size="Size.Small" Color="Color.Default">
+                <MudText Typo="Typo.body2"><b>@ActionLabel(a.Action)</b> · @a.ActorName</MudText>
+                <MudText Typo="Typo.caption">@a.At.LocalDateTime.ToString(DisplayFormats.DateTime)</MudText>
+            </MudTimelineItem>
+        }
+    </MudTimeline>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private TaskDetailVm? _vm;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        var result = await Sender.Send(new GetTaskDetailQuery(Id));
+        _vm = result.IsSuccess ? result.Value : null;
+        _loading = false;
+    }
+
+    private async Task MarkDone()
+    {
+        var r = await Sender.Send(new CompleteTaskCommand(Id, null));
+        if (!r.IsSuccess) Snackbar.Add(r.Error.Message, Severity.Warning);
+        await Load();
+    }
+
+    private async Task Reassign()
+    {
+        var parameters = new DialogParameters<AssignDialog> { { x => x.TaskIds, new List<Guid> { Id } } };
+        var dialog = await Dialogs.ShowAsync<AssignDialog>("Reassign task", parameters);
+        if (!(await dialog.Result)!.Canceled) await Load();
+    }
+
+    private async Task Edit()
+    {
+        var parameters = new DialogParameters<EditTaskDialog> { { x => x.Task, _vm!.Task } };
+        var dialog = await Dialogs.ShowAsync<EditTaskDialog>("Edit task", parameters);
+        if (!(await dialog.Result)!.Canceled) await Load();
+    }
+
+    private static string DisplayStatus(TaskDto t)
+    {
+        if (t.Status is "Todo" or "Accepted" && t.DueDate is { } d && d < DateTimeOffset.UtcNow) return "Overdue";
+        return t.Status switch { "Accepted" => "InProgress", "Todo" => "To do", _ => t.Status };
+    }
+
+    private static string ActionLabel(string action) => action switch
+    {
+        "task.create" => "Created",
+        "task.assign" => "Assigned",
+        "task.accept" => "Accepted",
+        "task.complete" => "Completed",
+        "task.decline" => "Declined",
+        "task.update" => "Edited",
+        _ => action
+    };
+}

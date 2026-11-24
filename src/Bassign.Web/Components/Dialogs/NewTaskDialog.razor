@@ -1,0 +1,40 @@
+@using Bassign.Application.Tasks.CreateTask
+@inject Mediator.ISender Sender
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_title" Label="Title" Required="true" Immediate="true" Class="mb-3" />
+        <MudTextField @bind-Value="_detail" Label="Detail" Lines="3" Class="mb-3" />
+        <MudDatePicker @bind-Date="_due" Label="Due date" Editable="true" Class="mb-3" />
+        <MudCheckBox @bind-Value="_requiresProof" Label="Require a proof-of-work photo" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_busy" OnClick="Create">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string _title = "";
+    private string? _detail;
+    private DateTime? _due;
+    private bool _requiresProof;
+    private string? _error;
+    private bool _busy;
+
+    private async Task Create()
+    {
+        _busy = true;
+        _error = null;
+        DateTimeOffset? due = _due is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d, DateTimeKind.Utc)) : null;
+        var r = await Sender.Send(new CreateTaskCommand(_title, _detail, due, _requiresProof, null));
+        if (r.IsSuccess) MudDialog.Close(DialogResult.Ok(true));
+        else { _error = r.Error.Message; _busy = false; }
+    }
+}

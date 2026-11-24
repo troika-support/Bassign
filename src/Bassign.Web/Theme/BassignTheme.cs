@@ -16,9 +16,9 @@ public static class BassignTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary        = "#1D4ED8",   // accent (brand override per install)
-            Background     = "#FFFFFF",
-            Surface        = "#F7F8FA",
+            Primary        = "#4F46E5",   // indigo accent (brand override per install); white-on 6.2 AAA
+            Background     = "#F6F7F9",   // grey canvas
+            Surface        = "#FFFFFF",   // white cards
             TextPrimary    = "#16191D",    // AAA 17.6
             TextSecondary  = "#44505E",    // AAA 8.2
             Success        = "#0B7A3B",
@@ -27,14 +27,14 @@ public static class BassignTheme
             LinesDefault   = "#E3E7EC",
             TableLines     = "#E3E7EC",
             DrawerBackground = "#FFFFFF",
-            AppbarBackground = "#FFFFFF",
+            AppbarBackground = "#F6F7F9",
             AppbarText     = "#16191D",
         },
         PaletteDark = new PaletteDark
         {
-            Primary        = "#7AA2FF",
-            Background     = "#15181C",
-            Surface        = "#1E232A",
+            Primary        = "#A5B4FC",
+            Background     = "#121418",
+            Surface        = "#1A1F26",
             TextPrimary    = "#E7EAEE",    // AAA 14.8
             TextSecondary  = "#AEB6C0",    // AAA 8.7
             Success        = "#56D08A",
@@ -42,13 +42,13 @@ public static class BassignTheme
             Error          = "#FF8585",
             LinesDefault   = "#2A313A",
             TableLines     = "#2A313A",
-            DrawerBackground = "#15181C",
-            AppbarBackground = "#15181C",
+            DrawerBackground = "#1A1F26",
+            AppbarBackground = "#121418",
             AppbarText     = "#E7EAEE",
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "8px",   // dense manager controls; field uses 12px via CSS
+            DefaultBorderRadius = "10px",  // FlowDesk-style rounded controls
         },
         Typography = new Typography
         {

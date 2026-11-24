@@ -22,6 +22,7 @@ public sealed record TaskListItemDto(
     string Title,
     string Status,
     string? AssigneeId,
+    string? AssigneeName,
     DateTimeOffset? DueDate,
     DateTimeOffset CreatedAt);
 
@@ -31,6 +32,6 @@ public static class TaskMappings
         t.Id, t.Title, t.Detail, t.DueDate, t.Status.ToString(),
         t.AssigneeId, t.CreatedById, t.RequiresProofPhoto, t.ProofPhotoRef, t.CreatedAt, t.CompletedAt);
 
-    public static TaskListItemDto ToListItem(this TaskItem t) => new(
-        t.Id, t.Title, t.Status.ToString(), t.AssigneeId, t.DueDate, t.CreatedAt);
+    public static TaskListItemDto ToListItem(this TaskItem t, string? assigneeName = null) => new(
+        t.Id, t.Title, t.Status.ToString(), t.AssigneeId, assigneeName, t.DueDate, t.CreatedAt);
 }

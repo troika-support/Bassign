@@ -1,12 +1,22 @@
-<MudItem xs="6" md="3">
-    <MudPaper Elevation="0" Class="pa-4 ba-metric" Style="border:1px solid var(--ba-line); border-radius:8px;">
-        <p class="ba-metric__label">@Label</p>
+<MudItem xs="6" sm="4" md="2" lg="2">
+    <div class="ba-card ba-metric">
+        <div class="ba-metric__top">
+            @if (!string.IsNullOrEmpty(Icon)) { <MudIcon Icon="@Icon" Size="Size.Small" /> }
+            <p class="ba-metric__label">@Label</p>
+        </div>
         <p class="ba-metric__value @(Variant is "" ? "" : $"ba-metric__value--{Variant}")">@Value</p>
-    </MudPaper>
+        @if (!string.IsNullOrEmpty(Sub))
+        {
+            <p class="ba-metric__sub @(SubAlert ? "ba-metric__sub--alert" : "")">@Sub</p>
+        }
+    </div>
 </MudItem>
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter, EditorRequired] public int Value { get; set; }
+    [Parameter] public string Icon { get; set; } = "";
     [Parameter] public string Variant { get; set; } = "";
+    [Parameter] public string? Sub { get; set; }
+    [Parameter] public bool SubAlert { get; set; }
 }

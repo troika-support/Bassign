@@ -1,7 +1,101 @@
 @page "/analytics"
 @attribute [Authorize(Roles = "Admin,Manager")]
+@using Bassign.Application.Analytics
+@inject Mediator.ISender Sender
 
 <PageTitle>Analytics · Bassign</PageTitle>
 
 <h1 class="ba-page-title">Analytics</h1>
-<p class="ba-page-sub">Accountability analytics arrive in step 09.</p>
+<p class="ba-page-sub">Accountability · last 90 days</p>
+
+@if (_vm is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Class="mb-6">
+        <MudItem xs="6" md="4">
+            <MudPaper Elevation="0" Class="pa-4 ba-metric" Style="border:1px solid var(--ba-line); border-radius:12px; box-shadow:var(--ba-shadow);">
+                <p class="ba-metric__label">On-time</p>
+                <p class="ba-metric__value ba-metric__value--ontime">@_vm.Metrics.OnTimePct.ToString("0.#")%</p>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="4">
+            <MudPaper Elevation="0" Class="pa-4 ba-metric" Style="border:1px solid var(--ba-line); border-radius:12px; box-shadow:var(--ba-shadow);">
+                <p class="ba-metric__label">Avg time to done</p>
+                <p class="ba-metric__value">@FormatHours(_vm.Metrics.AvgHoursToDone)</p>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="4">
+            <MudPaper Elevation="0" Class="pa-4 ba-metric" Style="border:1px solid var(--ba-line); border-radius:12px; box-shadow:var(--ba-shadow);">
+                <p class="ba-metric__label">Completed</p>
+                <p class="ba-metric__value">@_vm.Metrics.Completed</p>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_vm.Bottleneck is not null)
+    {
+        <MudPaper Elevation="0" Class="pa-3 mb-6" Style="background:var(--ba-accent-tint); border-radius:8px;">
+            <MudText Typo="Typo.body2">@_vm.Bottleneck</MudText>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.h6" Class="mb-2">On-time rate by week</MudText>
+    @if (_series.Count > 0 && _vm.OnTimeByWeek.Any(w => w.Completed > 0))
+    {
+        <MudChart T="double" ChartType="ChartType.Bar" ChartSeries="_series" ChartLabels="_labels"
+                  Width="100%" Height="300px" ChartOptions="_chartOptions" Class="mb-8" />
+    }
+    else
+    {
+        <p class="ba-empty__hint">Not enough completed tasks yet to chart a trend.</p>
+    }
+
+    <MudText Typo="Typo.h6" Class="mb-2">Completion by person</MudText>
+    @if (_vm.CompletionByPerson.Count == 0)
+    {
+        <p class="ba-empty__hint">No completed tasks in this window.</p>
+    }
+    else
+    {
+        var max = _vm.CompletionByPerson.Max(p => p.Completed);
+        @foreach (var p in _vm.CompletionByPerson)
+        {
+            var low = p.Completed <= max * 0.4;
+            <div class="ba-workload">
+                <span class="ba-workload__name" style="min-width:160px;">@p.Name</span>
+                <div class="ba-bar">
+                    <div class="ba-bar__fill" style="width:@(Pct(p.Completed, max))%; background:@(low ? "var(--ba-warning)" : "var(--ba-accent)");"></div>
+                </div>
+                <span class="ba-workload__meta">@p.Completed completed</span>
+            </div>
+        }
+    }
+}
+
+@code {
+    private AnalyticsVm? _vm;
+    private List<ChartSeries<double>> _series = [];
+    private string[] _labels = [];
+    private readonly BarChartOptions _chartOptions = new() { YAxisTicks = 20, MaxNumYAxisTicks = 6, ChartPalette = ["#4F46E5"] };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _vm = await Sender.Send(new GetAnalyticsQuery());
+        _labels = _vm.OnTimeByWeek.Select(w => w.WeekStart.ToString("d MMM")).ToArray();
+        _series = [ new ChartSeries<double> { Name = "On-time %", Data = _vm.OnTimeByWeek.Select(w => w.OnTimePct).ToArray() } ];
+    }
+
+    private static int Pct(int value, int max) => max <= 0 ? 0 : (int)Math.Round(100.0 * value / max);
+
+    private static string FormatHours(double hours)
+    {
+        if (hours <= 0) return "—";
+        if (hours < 48) return $"{hours:0.#}h";
+        var days = (int)(hours / 24);
+        var rem = (int)Math.Round(hours - days * 24);
+        return rem == 0 ? $"{days}d" : $"{days}d {rem}h";
+    }
+}

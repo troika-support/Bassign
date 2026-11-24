@@ -1,7 +1,136 @@
 @page "/tasks"
 @attribute [Authorize]
+@using Bassign.Application.Tasks.ListTasks
+@inject Mediator.ISender Sender
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
 
 <PageTitle>Tasks · Bassign</PageTitle>
 
-<h1 class="ba-page-title">Tasks</h1>
-<p class="ba-page-sub">The task list and detail arrive in step 08.</p>
+<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <h1 class="ba-page-title">Tasks</h1>
+    <AuthorizeView Roles="Admin,Manager">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="NewTask">New task</MudButton>
+    </AuthorizeView>
+</div>
+
+<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 0 16px;">
+    @foreach (var (key, label) in _pills)
+    {
+        <MudButton Size="Size.Small"
+                   Variant="@(_filter == key ? Variant.Filled : Variant.Outlined)"
+                   Color="@(_filter == key ? Color.Primary : Color.Default)"
+                   OnClick="@(() => _filter = key)">@label</MudButton>
+    }
+    <MudSpacer />
+    <MudTextField @bind-Value="_search" Placeholder="Search tasks" Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:260px;" />
+</div>
+
+@if (_all is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    @if (_selected.Count > 0)
+    {
+        <MudPaper Elevation="0" Class="pa-2 mb-2" Style="border:1px solid var(--ba-line); display:flex; gap:8px; align-items:center;">
+            <MudText Typo="Typo.body2">@_selected.Count selected</MudText>
+            <MudButton Size="Size.Small" OnClick="BulkAssign">Assign…</MudButton>
+            <MudButton Size="Size.Small" OnClick="BulkComplete">Mark done</MudButton>
+        </MudPaper>
+    }
+
+    var rows = Filtered();
+    @if (rows.Count == 0)
+    {
+        <p class="ba-empty__hint">No tasks match these filters.</p>
+    }
+    else
+    {
+        <MudDataGrid T="TaskListItemDto" Items="rows" Hover="true" Dense="true"
+                     MultiSelection="true" @bind-SelectedItems="_selected" RowClick="OnRowClick">
+            <Columns>
+                <SelectColumn T="TaskListItemDto" />
+                <PropertyColumn Property="x => x.Title" Title="Task" />
+                <TemplateColumn Title="Assignee">
+                    <CellTemplate>@(context.Item.AssigneeName ?? "Unassigned")</CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Due">
+                    <CellTemplate>@(context.Item.DueDate is { } d ? d.LocalDateTime.ToString(DisplayFormats.Date) : "—")</CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Title="Status">
+                    <CellTemplate><StatusChip Status="@DisplayStatus(context.Item)" /></CellTemplate>
+                </TemplateColumn>
+            </Columns>
+        </MudDataGrid>
+    }
+}
+
+@code {
+    private IReadOnlyList<TaskListItemDto>? _all;
+    private HashSet<TaskListItemDto> _selected = [];
+    private string _search = "";
+    private string _filter = "all";
+
+    private readonly (string Key, string Label)[] _pills =
+    [
+        ("all", "All"), ("todo", "To do"), ("inprogress", "In progress"), ("overdue", "Overdue")
+    ];
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _selected = [];
+        _all = await Sender.Send(new ListTasksQuery(null, null));
+    }
+
+    private List<TaskListItemDto> Filtered()
+    {
+        var now = DateTimeOffset.UtcNow;
+        IEnumerable<TaskListItemDto> q = _all ?? [];
+        if (!string.IsNullOrWhiteSpace(_search))
+            q = q.Where(t => t.Title.Contains(_search, StringComparison.OrdinalIgnoreCase));
+        q = _filter switch
+        {
+            "todo" => q.Where(t => t.Status == "Todo"),
+            "inprogress" => q.Where(t => t.Status == "Accepted"),
+            "overdue" => q.Where(t => (t.Status is "Todo" or "Accepted") && t.DueDate is { } d && d < now),
+            _ => q
+        };
+        return q.ToList();
+    }
+
+    private static string DisplayStatus(TaskListItemDto t)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (t.Status is "Todo" or "Accepted" && t.DueDate is { } d && d < now) return "Overdue";
+        return t.Status switch { "Accepted" => "InProgress", "Todo" => "To do", _ => t.Status };
+    }
+
+    private void OnRowClick(DataGridRowClickEventArgs<TaskListItemDto> e) =>
+        Nav.NavigateTo($"/tasks/{e.Item.Id}");
+
+    private async Task NewTask()
+    {
+        var dialog = await Dialogs.ShowAsync<NewTaskDialog>("New task");
+        if (!(await dialog.Result)!.Canceled) await Load();
+    }
+
+    private async Task BulkAssign()
+    {
+        var parameters = new DialogParameters<AssignDialog> { { x => x.TaskIds, _selected.Select(t => t.Id).ToList() } };
+        var dialog = await Dialogs.ShowAsync<AssignDialog>("Assign tasks", parameters);
+        if (!(await dialog.Result)!.Canceled) await Load();
+    }
+
+    private async Task BulkComplete()
+    {
+        foreach (var id in _selected.Select(t => t.Id).ToList())
+            await Sender.Send(new Bassign.Application.Tasks.CompleteTask.CompleteTaskCommand(id, null));
+        await Load();
+    }
+}

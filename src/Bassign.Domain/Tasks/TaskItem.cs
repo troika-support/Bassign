@@ -14,7 +14,7 @@ public sealed class TaskItem
     public Guid Id { get; private init; }
     public string Title { get; private set; } = string.Empty;
     public string? Detail { get; private set; }
-    public DateTimeOffset? DueDate { get; private init; }
+    public DateTimeOffset? DueDate { get; private set; }
     public TaskStatus Status { get; private set; }
     public string? AssigneeId { get; private set; }
     public string CreatedById { get; private init; } = string.Empty;
@@ -56,6 +56,21 @@ public sealed class TaskItem
         };
         task._events.Add(new TaskCreated(task.Id, task.Title));
         return task;
+    }
+
+    public void UpdateDetails(string title, string? detail, DateTimeOffset? dueDate, DateTimeOffset nowUtc)
+    {
+        if (Status is TaskStatus.Done or TaskStatus.Declined)
+            throw new InvalidOperationException("Cannot edit a closed task.");
+        if (string.IsNullOrWhiteSpace(title))
+            throw new ArgumentException("Title is required.", nameof(title));
+        if (dueDate is { } due && due <= nowUtc)
+            throw new ArgumentException("Due date must be in the future.", nameof(dueDate));
+
+        Title = title.Trim();
+        Detail = detail;
+        DueDate = dueDate;
+        _events.Add(new TaskUpdated(Id));
     }
 
     public void AssignTo(string userId)

@@ -1,0 +1,57 @@
+@using Bassign.Application.Tasks.GetAssignableUsers
+@using Bassign.Application.Tasks.AssignTask
+@inject Mediator.ISender Sender
+
+<MudDialog>
+    <DialogContent>
+        <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background:var(--ba-accent-tint); border-radius:8px;">
+            <MudText Typo="Typo.body2">AI suggestion arrives in step 13 — choose someone below for now.</MudText>
+        </MudPaper>
+
+        @if (_users is null)
+        {
+            <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+        }
+        else if (_users.Count == 0)
+        {
+            <MudText>No active people to assign.</MudText>
+        }
+        else
+        {
+            <MudRadioGroup T="string" @bind-Value="_selected">
+                @foreach (var u in _users)
+                {
+                    <MudRadio T="string" Value="@u.UserId" Class="d-flex">
+                        @u.Name <MudText Typo="Typo.caption" Class="ml-2">(@u.ActiveCount active)</MudText>
+                    </MudRadio>
+                }
+            </MudRadioGroup>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(string.IsNullOrEmpty(_selected) || _busy)"
+                   OnClick="Assign">Assign</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public List<Guid> TaskIds { get; set; } = [];
+
+    private IReadOnlyList<AssignableUser>? _users;
+    private string? _selected;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() =>
+        _users = await Sender.Send(new GetAssignableUsersQuery());
+
+    private async Task Assign()
+    {
+        if (string.IsNullOrEmpty(_selected)) return;
+        _busy = true;
+        foreach (var id in TaskIds)
+            await Sender.Send(new AssignTaskCommand(id, _selected));
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

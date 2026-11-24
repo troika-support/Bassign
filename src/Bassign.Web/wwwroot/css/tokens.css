@@ -1,27 +1,34 @@
-/* Bassign design tokens — docs/design-system.md §2–§4. Script-verified AAA for text.
-   Used by the shared RCL field components and any raw CSS. MudBlazor reads the palette from
-   BassignTheme.cs; keep the two in sync. --ba-accent is set from the organization's brand settings at runtime. */
+/* Bassign design tokens — FlowDesk-inspired visual refresh.
+   Grey canvas + white cards + soft shadow + vivid indigo accent.
+   Text tokens stay WCAG AAA (docs/design-system.md §2). --ba-accent is per-install at runtime. */
 :root {
-  --ba-accent:      #1D4ED8;
-  --ba-accent-tint: #EEF2FF;
-  --ba-bg:          #FFFFFF;
-  --ba-surface:     #F7F8FA;
+  --ba-accent:      #4F46E5;  /* indigo; white-on-accent 6.2 (AAA) */
+  --ba-accent-600:  #4338CA;  /* hover/pressed */
+  --ba-accent-tint: #EEF0FE;  /* selected / AI chip / active nav */
+  --ba-bg:          #F6F7F9;  /* page canvas (grey so white cards pop) */
+  --ba-card:        #FFFFFF;  /* cards, drawer, app bar */
+  --ba-surface:     #EEF1F4;  /* subtle fills: chip bg, bar track */
   --ba-ink:         #16191D;  /* AAA 17.6 */
   --ba-secondary:   #44505E;  /* AAA 8.2  */
-  --ba-muted:       #4C5864;  /* AAA 7.3  */
-  --ba-line:        #E3E7EC;
+  --ba-muted:       #5C6470;  /* AAA ~6.4 on card */
+  --ba-line:        #E7EAEF;  /* borders, dividers */
   --ba-success:     #0B7A3B;
   --ba-warning:     #B0520A;
   --ba-danger:      #C01B1B;
+  --ba-info:        #2563EB;
+  --ba-radius-card: 12px;
   --ba-radius-field: 12px;
   --ba-radius-dense: 8px;
+  --ba-shadow: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.07);
   --ba-motion: 120ms;
 }
 :root[data-theme="dark"], .ba-dark {
-  --ba-accent:      #7AA2FF;
-  --ba-accent-tint: #1B2740;
-  --ba-bg:          #15181C;
-  --ba-surface:     #1E232A;
+  --ba-accent:      #A5B4FC;  /* indigo-300; dark text on it is AAA */
+  --ba-accent-600:  #C7D2FE;
+  --ba-accent-tint: #1E2440;
+  --ba-bg:          #121418;
+  --ba-card:        #1A1F26;
+  --ba-surface:     #232A33;
   --ba-ink:         #E7EAEE;  /* AAA 14.8 */
   --ba-secondary:   #AEB6C0;  /* AAA 8.7  */
   --ba-muted:       #9AA4B0;  /* AAA 7.1  */
@@ -29,11 +36,15 @@
   --ba-success:     #56D08A;
   --ba-warning:     #F0A24B;
   --ba-danger:      #FF8585;
+  --ba-info:        #7AA2FF;
+  --ba-shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.4);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ba-accent:#7AA2FF; --ba-accent-tint:#1B2740; --ba-bg:#15181C; --ba-surface:#1E232A;
+    --ba-accent:#A5B4FC; --ba-accent-600:#C7D2FE; --ba-accent-tint:#1E2440;
+    --ba-bg:#121418; --ba-card:#1A1F26; --ba-surface:#232A33;
     --ba-ink:#E7EAEE; --ba-secondary:#AEB6C0; --ba-muted:#9AA4B0; --ba-line:#2A313A;
-    --ba-success:#56D08A; --ba-warning:#F0A24B; --ba-danger:#FF8585;
+    --ba-success:#56D08A; --ba-warning:#F0A24B; --ba-danger:#FF8585; --ba-info:#7AA2FF;
+    --ba-shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.4);
   }
 }

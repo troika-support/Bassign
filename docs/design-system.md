@@ -222,3 +222,26 @@ Each screen: route, then regions top-to-bottom with real copy and states. Role d
 - Confirmations: one warm line ("Accepted — due Tue. Send a photo here when it's done.").
 - Outside the 24-hour window: approved templates only (see `docs/whatsapp.md`).
 - Unknown number: enrollment prompt, never task content.
+
+---
+
+## Visual refresh — FlowDesk-inspired (adopted 2026-11)
+
+House style updated to match the FlowDesk B2B reference the client chose. Keeps the AAA text
+discipline above; changes the *surface language*:
+
+- **Canvas vs cards:** page background is light grey `--ba-bg #F6F7F9`; content sits on white
+  cards (`--ba-card #FFFFFF`) with a 1px `--ba-line` border, 12px radius, and one soft shadow
+  (`--ba-shadow`). Use the `.ba-card` class. Flat-on-white is replaced by grey-canvas + raised cards.
+- **Accent:** indigo `--ba-accent #4F46E5` (white-on-accent 6.2 → AAA), per-install override as before.
+  Dark mode accent `#A5B4FC`.
+- **Navigation:** left sidebar (white) with the logo on top, a filled **New task** CTA beneath it,
+  then nav links with an accent-tint rounded **active** state. Top bar is minimal (notifications + user).
+- **Dashboard:** greeting header ("Good morning, {name}" + date · open-task count), a row of metric
+  cards (icon + label + big number + contextual sub-line), an "Open work" donut (To do / In progress /
+  Overdue), and the "Team workload" list with avatars + load bars.
+- **Status colours (donut/charts):** To do `#2563EB`, In progress `#4F46E5`, Overdue `#C01B1B`,
+  Done `#0B7A3B`. Status is still word + colour, never colour alone.
+
+Later screens (Tasks grid, Team, Settings, mobile field view) follow this same card + accent + sidebar
+language.

@@ -1,11 +1,11 @@
-<MudNavMenu>
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
-    <MudNavLink Href="/tasks" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Checklist">Tasks</MudNavLink>
+<MudNavMenu Class="ba-nav px-2">
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Dashboard</MudNavLink>
+    <MudNavLink Href="/tasks" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Checklist">Tasks</MudNavLink>
     <AuthorizeView Roles="Admin,Manager">
-        <MudNavLink Href="/analytics" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Insights">Analytics</MudNavLink>
-        <MudNavLink Href="/team" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">Team</MudNavLink>
+        <MudNavLink Href="/analytics" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Insights">Analytics</MudNavLink>
+        <MudNavLink Href="/team" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Groups">Team</MudNavLink>
     </AuthorizeView>
     <AuthorizeView Roles="Admin">
-        <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink>
+        <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Settings">Settings</MudNavLink>
     </AuthorizeView>
 </MudNavMenu>

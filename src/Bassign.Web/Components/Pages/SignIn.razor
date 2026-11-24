@@ -15,7 +15,7 @@
         <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">That email or password doesn't match.</MudAlert>
     }
 
-    <form method="post" action="/account/login">
+    <form method="post" action="/account/login" data-enhance="false">
         <AntiforgeryToken />
         <input type="hidden" name="returnUrl" value="@ReturnUrl" />
 
