@@ -1,9 +1,6 @@
 using Microsoft.Maui.ApplicationModel;
-using Microsoft.Maui.Graphics;
-using Microsoft.Maui.Graphics.Platform;
 using Microsoft.Maui.Media;
 using Microsoft.Maui.Storage;
-using IImage = Microsoft.Maui.Graphics.IImage;
 
 namespace Bassign.Mobile.Services;
 
@@ -13,12 +10,22 @@ public interface IProofCamera
     Task<string?> CaptureAsync();
 }
 
-/// <summary>Camera → downscale to 1600px longest edge → JPEG at 70% quality, before it's queued.
-/// A typical phone photo goes from several MB to ~200–400 KB (data cost matters on mobile plans).</summary>
+/// <summary>
+/// Camera → upright (EXIF orientation applied) → max 1600px → JPEG 70% → metadata stripped, before it's queued.
+/// A typical phone photo goes from several MB to ~200–400 KB (data cost matters on mobile plans).
+/// Metadata is stripped on purpose: a proof photo must not silently record where the staff member stood (GPS).
+/// </summary>
 public sealed class ProofCamera : IProofCamera
 {
-    private const float MaxEdge = 1600f;
-    private const float Quality = 0.7f;
+    private static readonly MediaPickerOptions Options = new()
+    {
+        Title = "Proof of work",
+        RotateImage = true,          // apply the EXIF orientation flag so photos are never sideways
+        MaximumWidth = 1600,
+        MaximumHeight = 1600,
+        CompressionQuality = 70,
+        PreserveMetaData = false     // drop EXIF (incl. GPS location)
+    };
 
     public async Task<string?> CaptureAsync()
     {
@@ -31,27 +38,19 @@ public sealed class ProofCamera : IProofCamera
             if (permission != PermissionStatus.Granted)
                 return null;
 
-            var photo = await MainThread.InvokeOnMainThreadAsync(() => MediaPicker.Default.CapturePhotoAsync());
+            var photo = await MainThread.InvokeOnMainThreadAsync(() => MediaPicker.Default.CapturePhotoAsync(Options));
             if (photo is null)
                 return null;
 
+            // The processed file sits in the cache folder (the OS may clear it); keep our own copy until it's synced.
             var folder = Path.Combine(FileSystem.AppDataDirectory, "proof");
             Directory.CreateDirectory(folder);
             var target = Path.Combine(folder, $"{Guid.NewGuid():N}.jpg");
 
-            await using var source = await photo.OpenReadAsync();
-            IImage image = PlatformImage.FromStream(source, ImageFormat.Jpeg);
-            try
+            await using (var source = await photo.OpenReadAsync())
+            await using (var output = File.Create(target))
             {
-                if (image.Width > MaxEdge || image.Height > MaxEdge)
-                    image = image.Downsize(MaxEdge, disposeOriginal: true);
-
-                await using var output = File.Create(target);
-                await image.SaveAsync(output, ImageFormat.Jpeg, Quality);
-            }
-            finally
-            {
-                image.Dispose();
+                await source.CopyToAsync(output);
             }
             return target;
         }

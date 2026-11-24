@@ -6,10 +6,13 @@
              SafeAreaEdges="All"
              BackgroundColor="{AppThemeBinding Light=#F6F7F9, Dark=#121418}">
 
-    <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
-        <BlazorWebView.RootComponents>
-            <RootComponent Selector="#app" ComponentType="{x:Type components:Main}" />
-        </BlazorWebView.RootComponents>
-    </BlazorWebView>
+    <!-- Native Android pull-to-refresh: drag down at the top of the screen to sync. -->
+    <RefreshView x:Name="refresh">
+        <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
+            <BlazorWebView.RootComponents>
+                <RootComponent Selector="#app" ComponentType="{x:Type components:Main}" />
+            </BlazorWebView.RootComponents>
+        </BlazorWebView>
+    </RefreshView>
 
 </ContentPage>

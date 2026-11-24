@@ -1,13 +1,16 @@
+using Microsoft.Maui.Devices;
+
 namespace Bassign.Mobile;
 
 public static class MobileConfig
 {
+    public static string ApiBaseUrl =>
 #if DEBUG
-    // The Android emulator reaches the dev PC at 10.0.2.2; Bassign.Api's http profile listens on 5080.
-    // On a physical phone use the PC's LAN IP instead (and run the API bound to 0.0.0.0).
-    public const string ApiBaseUrl = "http://10.0.2.2:5080/";
+        DeviceInfo.Current.DeviceType == DeviceType.Virtual
+            ? "http://10.0.2.2:5080/"     // Android emulator → the dev PC
+            : "http://localhost:5080/";   // USB phone → the dev PC, via `adb reverse tcp:5080 tcp:5080` (docs/mobile-dev.md)
 #else
-    // Set per client install before release (step 17). HTTPS only.
-    public const string ApiBaseUrl = "https://bassign.example.org/api/";
+        // Set per client install before release (step 17). HTTPS only.
+        "https://bassign.example.org/api/";
 #endif
 }
