@@ -1,3 +1,5 @@
+@inject IWebHostEnvironment Env
+
 <MudNavMenu Class="ba-nav px-2">
     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Dashboard</MudNavLink>
     <MudNavLink Href="/tasks" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Checklist">Tasks</MudNavLink>
@@ -8,4 +10,9 @@
     <AuthorizeView Roles="Admin">
         <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Settings">Settings</MudNavLink>
     </AuthorizeView>
+    <MudNavLink Href="/profile" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Person">Profile</MudNavLink>
+    @if (Env.IsDevelopment())
+    {
+        <MudNavLink Href="/dev/whatsapp" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Outlined.Chat">WhatsApp simulator</MudNavLink>
+    }
 </MudNavMenu>

@@ -7,7 +7,7 @@ namespace Bassign.Domain.Tasks;
 /// so invariants cannot be violated from a handler. No EF/ASP.NET — tenancy does not exist in
 /// this single-organization app. "Now" is passed in (never DateTime.Now) to keep the domain pure.
 /// </summary>
-public sealed class TaskItem
+public sealed class TaskItem : IHasDomainEvents
 {
     private readonly List<IDomainEvent> _events = [];
 

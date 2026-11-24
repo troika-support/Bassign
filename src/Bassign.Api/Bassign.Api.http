@@ -21,3 +21,26 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "operations": [ { "opId": "6f1c2a1e-1111-4a5b-9c3d-000000000001", "taskId": "put-task-id-here", "action": "accept" } ] }
+
+### --- WhatsApp (step 12b) ---
+@waToken = dev-webhook-token-change-me
+
+### Link status for the signed-in user
+GET {{api}}/me/whatsapp
+Authorization: Bearer {{token}}
+
+### Start linking — returns a 6-digit code; send "LINK <code>" from the phone (or the simulator)
+POST {{api}}/me/whatsapp
+Authorization: Bearer {{token}}
+
+### Webhook: wrong token → 404
+POST {{api}}/webhooks/whatsapp/wrong-token
+Content-Type: application/json
+
+{}
+
+### Webhook: a text message from an unknown number → enrollment reply (see /dev/whatsapp in the Web app)
+POST {{api}}/webhooks/whatsapp/{{waToken}}
+Content-Type: application/json
+
+{"object":"whatsapp_business_account","entry":[{"id":"x","changes":[{"field":"messages","value":{"messaging_product":"whatsapp","messages":[{"from":"263779999999","id":"wamid.HTTPTEST1","timestamp":"1764000000","type":"text","text":{"body":"hi"}}]}}]}]}

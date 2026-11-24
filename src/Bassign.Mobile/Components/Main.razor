@@ -4,15 +4,36 @@
 @* The organization's accent, applied to every screen (overrides the default token). *@
 <style>@Branding.Css</style>
 
-<Router AppAssembly="@typeof(MauiProgram).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(FieldLayout)" />
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+@* In Blazor Hybrid an unhandled component exception would close the app; catch it here instead. *@
+<ErrorBoundary @ref="_boundary">
+    <ChildContent>
+        <Router AppAssembly="@typeof(MauiProgram).Assembly">
+            <Found Context="routeData">
+                <RouteView RouteData="@routeData" DefaultLayout="@typeof(FieldLayout)" />
+                <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+            </Found>
+        </Router>
+    </ChildContent>
+    <ErrorContent Context="error">
+        <main class="ba-field">
+            <div class="ba-card ba-empty" role="alert">
+                <p class="ba-empty__title">Something went wrong</p>
+                <p class="ba-empty__hint">Your saved work is safe on this phone.</p>
+                @if (MobileConfig.ShowErrorDetails)
+                {
+                    <p class="ba-task__notice" style="text-align:left; word-break:break-word;">@error.GetType().Name: @error.Message</p>
+                }
+                <button type="button" class="ba-submit" style="margin-top:20px;" @onclick="Recover">Continue</button>
+            </div>
+        </main>
+    </ErrorContent>
+</ErrorBoundary>
 
 @code {
+    private ErrorBoundary? _boundary;
+
     protected override void OnInitialized() => Branding.Changed += OnBrandingChanged;
     private void OnBrandingChanged() => _ = InvokeAsync(StateHasChanged);
+    private void Recover() => _boundary?.Recover();
     public void Dispose() => Branding.Changed -= OnBrandingChanged;
 }

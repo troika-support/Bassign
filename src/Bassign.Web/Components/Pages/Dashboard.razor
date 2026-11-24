@@ -29,6 +29,10 @@ else
         </AuthorizeView>
     }
 
+    <AuthorizeView Roles="Admin,Manager">
+        <DailySummaryCard />
+    </AuthorizeView>
+
     <MudGrid Spacing="3" Class="mb-6">
         <MetricCard Label="Open tasks" Value="@_vm.Metrics.OpenTasks" Icon="@Icons.Material.Outlined.Assignment"
                     Sub="@($"{_vm.Metrics.InProgress} in progress")" />

@@ -1,4 +1,7 @@
 using Bassign.Application.Common.Behaviors;
+using Bassign.Application.Common.Events;
+using Bassign.Application.Notifications;
+using Bassign.Domain.Tasks;
 using Bassign.Application.Tasks;
 using FluentValidation;
 using Mediator;
@@ -18,6 +21,9 @@ public static class DependencyInjection
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AuditBehavior<,>));
 
         services.AddScoped<ITaskAccess, TaskAccess>();
+
+        // Domain-event handlers (run inside the unit of work; they only record follow-up work).
+        services.AddScoped<IDomainEventHandler<TaskAssigned>, NotifyAssigneeOnTaskAssigned>();
 
         return services;
     }

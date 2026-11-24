@@ -1,0 +1,214 @@
+@page "/dev/whatsapp"
+@attribute [Authorize]
+@implements IDisposable
+@using Bassign.Application.Messaging
+@using Bassign.Application.Messaging.Simulator
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+@inject IWebHostEnvironment Env
+@inject OrgClock Clock
+
+<PageTitle>WhatsApp simulator · Bassign</PageTitle>
+
+@if (!Env.IsDevelopment())
+{
+    <h1 class="ba-page-title">Not available</h1>
+    <p class="ba-page-sub">The WhatsApp simulator only runs in development.</p>
+    return;
+}
+
+<h1 class="ba-page-title">WhatsApp simulator</h1>
+<p class="ba-page-sub">
+    Pretend to be a phone. Messages travel the real path — webhook body → inbox → <strong>Bassign.Api</strong> worker → replies —
+    so keep the API running.
+</p>
+
+@if (_vm is { Enabled: false })
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">Set <code>WhatsApp:Provider</code> to <code>simulator</code> in both hosts to use this page.</MudAlert>
+}
+
+<div class="ba-sim">
+    <section class="ba-card pa-5 ba-sim__side" aria-labelledby="sim-phone-h">
+        <h2 class="ba-section-label" id="sim-phone-h">Phone</h2>
+        <form @onsubmit="OpenPhone" class="d-flex gap-2 align-start">
+            <MudTextField @bind-Value="_phoneInput" Label="Your number" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          HelperText="International format, e.g. +263771234567" />
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Class="mt-2">Open</MudButton>
+        </form>
+        <dl class="ba-facts mt-4">
+            <dt>Business number</dt><dd>@(_vm?.BusinessNumber ?? "—")</dd>
+            <dt>This number</dt><dd>@(_vm?.LinkedTo is { } who ? $"Linked to {who}" : "Not linked")</dd>
+        </dl>
+        <h3 class="ba-section-label mt-4">Try</h3>
+        <div class="d-flex flex-wrap gap-2">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick='() => SendAsync("TASKS")'>TASKS</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick='() => SendAsync("hi")'>hi</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Href="/profile">Get a link code</MudButton>
+        </div>
+    </section>
+
+    <section class="ba-sim__phone" aria-label="Conversation with @(_vm?.BusinessNumber ?? "Bassign")">
+        <header class="ba-sim__bar">
+            <span class="ba-sim__avatar" aria-hidden="true">B</span>
+            <div>
+                <div class="ba-sim__title">Bassign</div>
+                <div class="ba-sim__subtitle">@_phone</div>
+            </div>
+        </header>
+
+        <div class="ba-sim__chat" role="log" aria-live="polite" aria-relevant="additions">
+            @if (_vm is null || _vm.Entries.Count == 0)
+            {
+                <p class="ba-sim__empty">No messages yet. Send “hi”, or get a link code from your Profile and send “LINK 123456”.</p>
+            }
+            else
+            {
+                foreach (var e in _vm.Entries)
+                {
+                    var mine = e.Direction == "in";
+                    <div class="ba-sim__row @(mine ? "ba-sim__row--me" : "")">
+                        <div class="ba-sim__bubble @(mine ? "ba-sim__bubble--me" : "")">
+                            @if (e.Kind == "template") { <div class="ba-sim__tag">Template</div> }
+                            <div class="ba-sim__body">@(e.Kind == "image" ? "📷 Photo" : e.Body)</div>
+                            <div class="ba-sim__meta">
+                                @Time(e.At)
+                                @if (!mine) { <span class="ba-sim__status">· @e.Status</span> }
+                            </div>
+                        </div>
+                        @if (!mine && e.Actions.Count > 0)
+                        {
+                            <div class="ba-sim__actions @(e.Kind == "list" ? "ba-sim__actions--list" : "")">
+                                @foreach (var a in e.Actions)
+                                {
+                                    <button type="button" class="ba-sim__action" disabled="@_busy"
+                                            @onclick="() => ReplyAsync(a)">@a.Title</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            @if (_waitingSince is { } since && DateTimeOffset.UtcNow - since > TimeSpan.FromSeconds(6))
+            {
+                <p class="ba-sim__empty" role="status">Still waiting for a reply — is <strong>Bassign.Api</strong> running? Its worker processes the inbox.</p>
+            }
+        </div>
+
+        <form class="ba-sim__compose" @onsubmit="SendTypedAsync">
+            <label class="ba-sim__attach" title="Send a photo (JPEG)">
+                <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" aria-hidden="true" />
+                <span class="visually-hidden">Send a photo</span>
+                <InputFile OnChange="SendPhotoAsync" accept=".jpg,.jpeg,image/jpeg" class="visually-hidden" disabled="@_busy" />
+            </label>
+            <input class="ba-sim__input" @bind="_text" @bind:event="oninput" placeholder="Message" aria-label="Message" maxlength="1000" />
+            <button type="submit" class="ba-sim__send" disabled="@(_busy || string.IsNullOrWhiteSpace(_text))" aria-label="Send">
+                <MudIcon Icon="@Icons.Material.Filled.Send" aria-hidden="true" />
+            </button>
+        </form>
+    </section>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "phone")] private string? PhoneQuery { get; set; }
+
+    private string _phoneInput = "+263771234567";
+    private string _phone = "+263771234567";
+    private string _text = "";
+    private bool _busy;
+    private int _inboundCount;
+    private DateTimeOffset? _waitingSince;
+    private SimulatorConversationVm? _vm;
+    private readonly CancellationTokenSource _cts = new();
+    private TimeZoneInfo _zone = TimeZoneInfo.Utc;
+
+    private string Time(DateTimeOffset at) =>
+        OrgClock.InZone(at, _zone).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Env.IsDevelopment()) return;
+        _zone = await Clock.ZoneAsync();
+        if (!string.IsNullOrWhiteSpace(PhoneQuery)) _phoneInput = _phone = PhoneQuery.Trim();
+        await RefreshAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender && Env.IsDevelopment()) _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+                await InvokeAsync(async () => { await RefreshAsync(); StateHasChanged(); });
+        }
+        catch (OperationCanceledException) { /* page closed */ }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) { /* circuit gone */ }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _vm = await Sender.Send(new GetSimulatorConversationQuery(_phone));
+        var inbound = _vm.Entries.Count(e => e.Direction == "in");
+        var outLast = _vm.Entries.Count > 0 && _vm.Entries[^1].Direction == "out";
+        if (inbound > _inboundCount && outLast) _waitingSince = null;   // reply arrived
+        _inboundCount = inbound;
+    }
+
+    private async Task OpenPhone()
+    {
+        _phone = _phoneInput.Trim();
+        _inboundCount = 0;
+        _waitingSince = null;
+        await RefreshAsync();
+    }
+
+    private Task SendTypedAsync()
+    {
+        var text = _text;
+        _text = "";
+        return SendAsync(text);
+    }
+
+    private Task SendAsync(string text) => InjectAsync(new SimulateInboundCommand(_phone, text, null, null, null));
+
+    private Task ReplyAsync(WaButton action) => InjectAsync(new SimulateInboundCommand(_phone, null, action.Id, action.Title, null));
+
+    private async Task SendPhotoAsync(InputFileChangeEventArgs e)
+    {
+        const long max = 5 * 1024 * 1024;
+        if (e.File.Size > max)
+        {
+            Snackbar.Add("Photos must be under 5 MB.", Severity.Warning);
+            return;
+        }
+        using var buffer = new MemoryStream();
+        await using (var stream = e.File.OpenReadStream(max))
+            await stream.CopyToAsync(buffer);
+        await InjectAsync(new SimulateInboundCommand(_phone, null, null, null, buffer.ToArray()));
+    }
+
+    private async Task InjectAsync(SimulateInboundCommand command)
+    {
+        _busy = true;
+        var result = await Sender.TrySend(command);
+        _busy = false;
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error.Message, Severity.Warning);
+            return;
+        }
+        _waitingSince = DateTimeOffset.UtcNow;
+        await RefreshAsync();
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

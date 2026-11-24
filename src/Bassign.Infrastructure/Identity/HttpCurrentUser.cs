@@ -4,9 +4,10 @@ using Microsoft.AspNetCore.Http;
 
 namespace Bassign.Infrastructure.Identity;
 
-/// <summary>Resolves the acting user from the current request. Falls back to "system" (e.g. jobs).</summary>
-public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
+/// <summary>The acting user: a run-as override (WhatsApp, background work) first, then the HTTP caller.</summary>
+public sealed class HttpCurrentUser(IHttpContextAccessor accessor, OperationUser operation) : ICurrentUser
 {
     public string UserId =>
-        accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
+        operation.UserId is { Length: > 0 } id ? id
+        : accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
 }

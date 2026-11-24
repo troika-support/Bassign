@@ -1,0 +1,49 @@
+@using Bassign.Application.Ai
+@using Bassign.Application.Ai.DigestSummary
+@inject IUiSender Sender
+
+<section class="ba-card pa-4 mb-5 ba-summary" aria-labelledby="sum-h">
+    <div class="ba-summary__head">
+        <h2 class="ba-section-label" id="sum-h" style="margin:0;">
+            <MudIcon Icon="@Icons.Material.Outlined.AutoAwesome" Size="Size.Small" aria-hidden="true" Style="vertical-align:-3px;" />
+            Today's summary
+        </h2>
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="Generate"
+                   StartIcon="@(_vm is null ? Icons.Material.Outlined.AutoAwesome : Icons.Material.Outlined.Refresh)">
+            @(_vm is null ? "Generate" : "Refresh")
+        </MudButton>
+    </div>
+    <div role="status" aria-live="polite">
+        @if (_busy)
+        {
+            <p class="ba-muted ba-waiting"><MudProgressCircular Indeterminate="true" Size="Size.Small" aria-hidden="true" /> Writing your summary…</p>
+        }
+        else if (_vm is null)
+        {
+            <p class="ba-muted" style="margin:0;">A short AI briefing of what needs attention today, written from your task data.</p>
+        }
+        else if (_vm is { Outcome: AiOutcome.Ok, Text: { } text })
+        {
+            <p class="ba-summary__text">@text</p>
+            <p class="ba-ai__fine" style="margin:0;">AI-generated from @_vm.Facts.Open open tasks — check the details below.</p>
+        }
+        else
+        {
+            <p class="ba-muted" style="margin:0;">
+                @(_vm.Outcome == AiOutcome.Disabled ? "AI summaries are off — add an AI key to this install to enable them." : "Summary unavailable right now. Your numbers below are up to date.")
+            </p>
+        }
+    </div>
+</section>
+
+@code {
+    private DigestSummaryVm? _vm;
+    private bool _busy;
+
+    private async Task Generate()
+    {
+        _busy = true;
+        try { _vm = await Sender.Send(new GetDigestSummaryQuery()); }
+        finally { _busy = false; }
+    }
+}

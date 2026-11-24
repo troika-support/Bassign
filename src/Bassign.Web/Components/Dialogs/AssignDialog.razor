@@ -1,12 +1,45 @@
+@using Bassign.Application.Ai
+@using Bassign.Application.Ai.SuggestAssignee
 @using Bassign.Application.Tasks.GetAssignableUsers
 @using Bassign.Application.Tasks.AssignTask
 @inject IUiSender Sender
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
-        <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background:var(--ba-accent-tint); border-radius:8px;">
-            <MudText Typo="Typo.body2">AI suggestion arrives in step 13 — choose someone below for now.</MudText>
-        </MudPaper>
+        @if (TaskIds.Count == 1)
+        {
+            <div class="ba-ai @(_suggestion?.Outcome == AiOutcome.Ok ? "ba-ai--ok" : "")" role="status" aria-live="polite">
+                @if (_suggesting)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" aria-hidden="true" />
+                    <span>Finding the best person…</span>
+                }
+                else if (_suggestion is { Outcome: AiOutcome.Ok } s)
+                {
+                    <MudIcon Icon="@Icons.Material.Outlined.AutoAwesome" Size="Size.Small" aria-hidden="true" Class="ba-ai__icon" />
+                    <div class="ba-ai__text">
+                        <div><strong>Suggested: @s.Name</strong> <span class="ba-ai__conf">· @Pct(s.Confidence) confident</span></div>
+                        @if (!string.IsNullOrEmpty(s.Reasoning)) { <div class="ba-ai__why">@s.Reasoning</div> }
+                        <div class="ba-ai__fine">AI suggestion — you decide.</div>
+                    </div>
+                    @if (_selected != s.UserId)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => _selected = s.UserId">Use</MudButton>
+                    }
+                }
+                else if (_suggestion is { Outcome: AiOutcome.NoConfidentMatch })
+                {
+                    <MudIcon Icon="@Icons.Material.Outlined.AutoAwesome" Size="Size.Small" aria-hidden="true" Class="ba-ai__icon" />
+                    <span>No clear match for this task. People are listed lightest workload first.</span>
+                }
+                else if (_suggestion is not null)
+                {
+                    <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" aria-hidden="true" Class="ba-ai__icon" />
+                    <span>@(_suggestion.Outcome == AiOutcome.Disabled ? "AI suggestions are off for this workspace." : "AI suggestion unavailable right now.") People are listed lightest workload first.</span>
+                }
+            </div>
+        }
 
         @if (_users is null)
         {
@@ -18,11 +51,16 @@
         }
         else
         {
-            <MudRadioGroup T="string" @bind-Value="_selected">
+            <MudRadioGroup T="string" @bind-Value="_selected" aria-label="Assign to">
                 @foreach (var u in _users)
                 {
                     <MudRadio T="string" Value="@u.UserId" Class="d-flex">
-                        @u.Name <MudText Typo="Typo.caption" Class="ml-2">(@u.ActiveCount active)</MudText>
+                        @u.Name
+                        <MudText Typo="Typo.caption" Class="ml-2">(@u.ActiveCount active)</MudText>
+                        @if (_suggestion is { Outcome: AiOutcome.Ok } sg && sg.UserId == u.UserId)
+                        {
+                            <span class="ba-ai__tag">Suggested</span>
+                        }
                     </MudRadio>
                 }
             </MudRadioGroup>
@@ -40,18 +78,51 @@
     [Parameter] public List<Guid> TaskIds { get; set; } = [];
 
     private IReadOnlyList<AssignableUser>? _users;
+    private AssigneeSuggestionVm? _suggestion;
     private string? _selected;
-    private bool _busy;
+    private bool _busy, _suggesting;
 
-    protected override async Task OnInitializedAsync() =>
-        _users = await Sender.Send(new GetAssignableUsersQuery());
+    protected override async Task OnInitializedAsync()
+    {
+        var users = await Sender.Send(new GetAssignableUsersQuery());
+        _users = users.OrderBy(u => u.ActiveCount).ThenBy(u => u.Name).ToList();   // lightest first = safe default
+        if (TaskIds.Count == 1) _ = SuggestAsync(TaskIds[0]);
+    }
+
+    /// <summary>Runs after the list shows, so a slow model never blocks assigning (spec §3.F.2).</summary>
+    private async Task SuggestAsync(Guid taskId)
+    {
+        _suggesting = true;
+        try
+        {
+            _suggestion = await Sender.Send(new SuggestAssigneeQuery(taskId));
+            // Pre-select only if the manager hasn't picked anyone yet; they still press Assign.
+            if (_suggestion is { Outcome: AiOutcome.Ok, UserId: { } id } && _selected is null) _selected = id;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _suggestion = new AssigneeSuggestionVm(AiOutcome.Unavailable, null, null, null, null, null);
+        }
+        finally
+        {
+            _suggesting = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string Pct(double? confidence) => $"{Math.Round((confidence ?? 0) * 100):0}%";
 
     private async Task Assign()
     {
         if (string.IsNullOrEmpty(_selected)) return;
         _busy = true;
+        var failures = 0;
         foreach (var id in TaskIds)
-            await Sender.TrySend(new AssignTaskCommand(id, _selected));
+        {
+            var result = await Sender.TrySend(new AssignTaskCommand(id, _selected));
+            if (!result.IsSuccess) failures++;
+        }
+        if (failures > 0) Snackbar.Add($"{failures} task{(failures == 1 ? "" : "s")} couldn't be assigned.", Severity.Warning);
         MudDialog.Close(DialogResult.Ok(true));
     }
 }

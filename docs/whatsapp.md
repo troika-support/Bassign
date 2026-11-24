@@ -94,3 +94,24 @@ User adds their number in-app → send a one-time code (template or in-app) → 
 - Double actions → missing dedupe.
 - Wrong user → sender-number binding wrong.
 - Media 404 → media URL expired (fetch too late).
+
+## How Bassign implements it (steps 12a + 12b)
+
+**Out:** a task change raises a domain event → `UnitOfWork` writes an `OutboundNotifications` row in the same transaction → `NotificationWorker` (API host) picks a channel → `WhatsAppChannel` sends buttons inside the 24h window, the `task_assigned` template outside it.
+
+**In:** `POST /webhooks/whatsapp/{WebhookToken}` (token compared in constant time; `X-Hub-Signature-256` checked when `WhatsApp:AppSecret` is set) → `WhatsAppWebhookIntake` stores each message/status in `InboundWebhookMessages` keyed by the provider id (a retried webhook is a no-op) → returns 200 at once → `WhatsAppInboxWorker` (woken by the webhook, otherwise every 2 s) → `HandleInboundWhatsAppCommand`:
+
+| Message | Result |
+|---|---|
+| `LINK 123456` | verifies the number for whoever was shown that code (max 6 tries/hour per number) |
+| any message from an unlinked number | enrollment prompt — never any task data |
+| button / list / template reply `accept:` `decline:` `done:` `task:` + id | the matching command, **run as the linked user** (`IRunAs`) so permissions + audit apply |
+| a photo | proof for the task awaiting one → `CompleteTaskCommand` with the stored proof |
+| `tasks` / `hi` / `menu` | the person's open tasks (one card, or a list of up to 10) |
+| anything else | short help |
+
+Replies are sent after the inbox item is marked done, so a failed send never re-runs a command. The webhook path is redacted from request logs.
+
+**Development:** `WhatsApp:Provider = simulator`. Run **both** hosts; open **WhatsApp simulator** in the Web app's nav. The simulator builds a real provider-shaped webhook body and puts it through the same intake, so the API worker handles it exactly like production.
+
+**Going live (360dialog):** set `WhatsApp__Provider=360dialog`, `WhatsApp__ApiKey`, `WhatsApp__BusinessNumber`, `WhatsApp__WebhookToken` (long random), optionally `WhatsApp__AppSecret`, as environment variables on IIS — never in appsettings. Point the 360dialog webhook at `https://<api-host>/webhooks/whatsapp/<WebhookToken>`. Get the `task_assigned` template approved first (see above).

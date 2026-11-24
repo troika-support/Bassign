@@ -1,3 +1,4 @@
+@inject TaskListEvents TaskEvents
 @inherits LayoutComponentBase
 @using Bassign.Application.Organizations.GetOrganization
 @inject IDialogService Dialogs
@@ -25,6 +26,8 @@
                     <MudText Typo="Typo.body2">@context.User.Identity?.Name</MudText>
                 </div>
                 <MudDivider />
+                <MudButton Href="/profile" FullWidth="true" Class="justify-start"
+                           StartIcon="@Icons.Material.Outlined.Person">Profile</MudButton>
                 <form method="post" action="/account/logout" data-enhance="false">
                     <AntiforgeryToken />
                     <MudButton ButtonType="ButtonType.Submit" FullWidth="true" Class="justify-start"
@@ -74,6 +77,8 @@
     private async Task NewTask()
     {
         var dialog = await Dialogs.ShowAsync<NewTaskDialog>("New task");
-        if (!(await dialog.Result)!.Canceled) Nav.NavigateTo("/tasks", forceLoad: false);
+        if ((await dialog.Result)!.Canceled) return;
+        await TaskEvents.RaiseAsync();
+        if (!Nav.Uri.Contains("/tasks", StringComparison.OrdinalIgnoreCase)) Nav.NavigateTo("/tasks");
     }
 }

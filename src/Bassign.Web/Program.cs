@@ -31,8 +31,9 @@ builder.Services.AddMudServices();
 builder.Services.AddApplication().AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<UserContext>();
 builder.Services.AddScoped<ICurrentUser, WebCurrentUser>();   // overrides the HTTP-only default
-builder.Services.AddScoped<IUiSender, UiSender>();
-builder.Services.AddScoped<OrgClock>();             // one DI scope (and DbContext) per UI operation
+builder.Services.AddScoped<IUiSender, UiSender>();   // one DI scope (and DbContext) per UI operation
+builder.Services.AddScoped<OrgClock>();
+builder.Services.AddScoped<TaskListEvents>();   // "tasks changed" signal within a circuit
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

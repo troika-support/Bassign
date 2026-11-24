@@ -193,13 +193,14 @@ else
         if (task.RequiresProofPhoto)
         {
             _busy = true;
-            photo = await Camera.CaptureAsync();
+            var capture = await Camera.CaptureAsync();
             _busy = false;
-            if (photo is null)
+            if (capture.Path is null)
             {
-                _flash = "No photo taken — this task needs one to finish.";
+                _flash = capture.Problem ?? "No photo taken — this task needs one to finish.";
                 return;
             }
+            photo = capture.Path;
         }
         await RunAsync(() => Store.CompleteAsync(task.Id, photo), "Marked done — thanks.");
     }

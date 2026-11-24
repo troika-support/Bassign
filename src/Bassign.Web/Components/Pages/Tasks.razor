@@ -5,28 +5,30 @@
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
 @inject OrgClock Clock
+@inject ISnackbar Snackbar
+@inject TaskListEvents TaskEvents
+@implements IDisposable
 
 <PageTitle>Tasks · Bassign</PageTitle>
 
-<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-    <h1 class="ba-page-title">Tasks</h1>
-    <AuthorizeView Roles="Admin,Manager">
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                   OnClick="NewTask">New task</MudButton>
-    </AuthorizeView>
-</div>
+<h1 class="ba-page-title">Tasks</h1>
 
-<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 0 16px;">
-    @foreach (var (key, label) in _pills)
-    {
-        <MudButton Size="Size.Small"
-                   Variant="@(_filter == key ? Variant.Filled : Variant.Outlined)"
-                   Color="@(_filter == key ? Color.Primary : Color.Default)"
-                   OnClick="@(() => _filter = key)">@label</MudButton>
-    }
-    <MudSpacer />
-    <MudTextField @bind-Value="_search" Placeholder="Search tasks" Variant="Variant.Outlined" Margin="Margin.Dense"
-                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width:260px;" />
+<div class="ba-toolbar">
+    <div class="ba-toolbar__filters" role="group" aria-label="Filter tasks">
+        @foreach (var (key, label) in _pills)
+        {
+            <MudButton Class="ba-pill"
+                       Variant="@(_filter == key ? Variant.Filled : Variant.Outlined)"
+                       Color="@(_filter == key ? Color.Primary : Color.Default)"
+                       aria-pressed="@(_filter == key ? "true" : "false")"
+                       OnClick="@(() => _filter = key)">@label</MudButton>
+        }
+    </div>
+    <div class="ba-toolbar__search">
+        <MudTextField @bind-Value="_search" Placeholder="Search tasks" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Immediate="true" DebounceInterval="200" aria-label="Search tasks"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+    </div>
 </div>
 
 @if (_all is null)
@@ -55,9 +57,16 @@ else
                      MultiSelection="true" @bind-SelectedItems="_selected" RowClick="OnRowClick">
             <Columns>
                 <SelectColumn T="TaskListItemDto" />
-                <PropertyColumn Property="x => x.Title" Title="Task" />
+                <TemplateColumn Title="Task">
+                    <CellTemplate>
+                        <a class="ba-rowlink" href="/tasks/@context.Item.Id" @onclick:stopPropagation="true">@context.Item.Title</a>
+                    </CellTemplate>
+                </TemplateColumn>
                 <TemplateColumn Title="Assignee">
-                    <CellTemplate>@(context.Item.AssigneeName ?? "Unassigned")</CellTemplate>
+                    <CellTemplate>
+                        @if (context.Item.AssigneeName is { } who) { @who }
+                        else { <span class="ba-unassigned">Unassigned</span> }
+                    </CellTemplate>
                 </TemplateColumn>
                 <TemplateColumn Title="Due">
                     <CellTemplate>@(context.Item.DueDate is { } d ? OrgClock.FormatDue(OrgClock.InZone(d, _zone)) : "—")</CellTemplate>
@@ -79,14 +88,19 @@ else
 
     private readonly (string Key, string Label)[] _pills =
     [
-        ("all", "All"), ("todo", "To do"), ("inprogress", "In progress"), ("overdue", "Overdue")
+        ("all", "All"), ("todo", "To do"), ("inprogress", "In progress"), ("overdue", "Overdue"), ("done", "Done")
     ];
 
     protected override async Task OnInitializedAsync()
     {
         _zone = await Clock.ZoneAsync();
         await Load();
+        TaskEvents.Changed += OnTasksChanged;
     }
+
+    private Task OnTasksChanged() => InvokeAsync(async () => { await Load(); StateHasChanged(); });
+
+    public void Dispose() => TaskEvents.Changed -= OnTasksChanged;
 
     private async Task Load()
     {
@@ -105,9 +119,17 @@ else
             "todo" => q.Where(t => t.Status == "Todo"),
             "inprogress" => q.Where(t => t.Status == "Accepted"),
             "overdue" => q.Where(t => (t.Status is "Todo" or "Accepted") && t.DueDate is { } d && d < now),
+            "done" => q.Where(t => t.Status == "Done"),
             _ => q
         };
-        return q.ToList();
+        // 3: open work first (overdue naturally leads, ordered by due date; no due date after dated ones),
+        // finished work last, most recent first.
+        return q
+            .OrderBy(t => t.Status is "Todo" or "Accepted" ? 0 : 1)
+            .ThenBy(t => t.Status is "Todo" or "Accepted" ? t.DueDate ?? DateTimeOffset.MaxValue : DateTimeOffset.MaxValue)
+            .ThenByDescending(t => t.DueDate ?? DateTimeOffset.MinValue)
+            .ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
     }
 
     private static string DisplayStatus(TaskListItemDto t)
@@ -120,12 +142,6 @@ else
     private void OnRowClick(DataGridRowClickEventArgs<TaskListItemDto> e) =>
         Nav.NavigateTo($"/tasks/{e.Item.Id}");
 
-    private async Task NewTask()
-    {
-        var dialog = await Dialogs.ShowAsync<NewTaskDialog>("New task");
-        if (!(await dialog.Result)!.Canceled) await Load();
-    }
-
     private async Task BulkAssign()
     {
         var parameters = new DialogParameters<AssignDialog> { { x => x.TaskIds, _selected.Select(t => t.Id).ToList() } };
@@ -135,8 +151,19 @@ else
 
     private async Task BulkComplete()
     {
-        foreach (var id in _selected.Select(t => t.Id).ToList())
-            await Sender.Send(new Bassign.Application.Tasks.CompleteTask.CompleteTaskCommand(id, null));
+        var picked = _selected.ToList();
+        var failures = new List<string>();
+        foreach (var t in picked)
+        {
+            var result = await Sender.TrySend(new Bassign.Application.Tasks.CompleteTask.CompleteTaskCommand(t.Id, null));
+            if (!result.IsSuccess) failures.Add($"{t.Title}: {result.Error.Message}");
+        }
         await Load();
+
+        var done = picked.Count - failures.Count;
+        if (done > 0) Snackbar.Add($"{done} task{(done == 1 ? "" : "s")} marked done.", Severity.Success);
+        if (failures.Count > 0)
+            Snackbar.Add($"{failures.Count} couldn't be marked done — {string.Join(" · ", failures.Take(3))}", Severity.Warning,
+                o => o.VisibleStateDuration = 10000);
     }
 }

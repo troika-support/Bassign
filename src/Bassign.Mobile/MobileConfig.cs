@@ -13,4 +13,12 @@ public static class MobileConfig
         // Set per client install before release (step 17). HTTPS only.
         "https://bassign.example.org/api/";
 #endif
+
+    /// <summary>Show exception details on screen (debug builds only).</summary>
+    public static bool ShowErrorDetails =>
+#if DEBUG
+        true;
+#else
+        false;
+#endif
 }

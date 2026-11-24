@@ -19,6 +19,7 @@ builder.Services
     .AddApi();
 
 builder.Services.AddBassignJwtAuth(builder.Configuration);
+builder.Services.AddBassignWorkers();   // notification sender + WhatsApp inbox — this host only
 
 // Options bound from config, validated at startup. Secrets never live in source:
 // the DB connection string comes from appsettings.Development.json (dev) or an env var (prod).
@@ -28,7 +29,6 @@ builder.Services.AddOptions<DatabaseOptions>()
     .ValidateOnStart();
 builder.Services.AddOptions<AuthOptions>().Bind(builder.Configuration.GetSection(AuthOptions.Section));
 builder.Services.AddOptions<WhatsAppOptions>().Bind(builder.Configuration.GetSection(WhatsAppOptions.Section));
-builder.Services.AddOptions<AiOptions>().Bind(builder.Configuration.GetSection(AiOptions.Section));
 
 var app = builder.Build();
 
@@ -48,7 +48,18 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler();
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(options =>
+{
+    // The WhatsApp webhook path contains a secret token: never write it to the logs.
+    options.GetMessageTemplateProperties = (context, path, elapsed, status) =>
+    [
+        new Serilog.Events.LogEventProperty("RequestMethod", new Serilog.Events.ScalarValue(context.Request.Method)),
+        new Serilog.Events.LogEventProperty("RequestPath", new Serilog.Events.ScalarValue(
+            path.StartsWith("/webhooks/whatsapp/", StringComparison.OrdinalIgnoreCase) ? "/webhooks/whatsapp/[Redacted]" : path)),
+        new Serilog.Events.LogEventProperty("StatusCode", new Serilog.Events.ScalarValue(status)),
+        new Serilog.Events.LogEventProperty("Elapsed", new Serilog.Events.ScalarValue(elapsed))
+    ];
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
