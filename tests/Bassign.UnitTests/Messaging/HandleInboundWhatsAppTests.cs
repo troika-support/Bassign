@@ -114,6 +114,15 @@ public class HandleInboundWhatsAppTests
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) { Saves++; return Task.FromResult(1); }
     }
 
+    private sealed class ConsentLog : Bassign.Application.Privacy.IConsentRegister
+    {
+        public List<(string UserId, string Purpose, bool Granted)> Entries { get; } = [];
+        public void Record(string userId, string purpose, bool granted, string source, DateTimeOffset at, string version = Bassign.Application.Privacy.ConsentPurposes.CurrentNoticeVersion) =>
+            Entries.Add((userId, purpose, granted));
+        public Task<IReadOnlyList<Bassign.Application.Privacy.ConsentEntry>> ForUserAsync(string userId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Bassign.Application.Privacy.ConsentEntry>>([]);
+    }
+
     private sealed class Sut
     {
         public Bindings Bindings { get; } = new();
@@ -122,9 +131,10 @@ public class HandleInboundWhatsAppTests
         public TaskRepo Tasks { get; } = new();
         public Tokens Tokens { get; } = new();
         public Uow Uow { get; } = new();
+        public ConsentLog Consents { get; } = new();
 
         public HandleInboundWhatsAppHandler Handler => new(
-            Bindings, Log, new Client(), Tokens, RunAs, Tasks, new Org(), new Users(), new Proofs(), Uow, TimeProvider.System);
+            Bindings, Log, new Client(), Tokens, RunAs, Tasks, new Org(), new Users(), new Proofs(), Uow, Consents, TimeProvider.System);
 
         public WhatsAppBinding LinkedUser()
         {
@@ -219,6 +229,7 @@ public class HandleInboundWhatsAppTests
 
         Assert.True(binding.Verified);
         Assert.Equal(Phone, binding.PhoneE164);
+        Assert.Contains((UserId, Bassign.Application.Privacy.ConsentPurposes.WhatsApp, true), sut.Consents.Entries);   // consent register
         Assert.Contains("Linked", Assert.IsType<WaText>(Assert.Single(replies)).Body, StringComparison.Ordinal);
         Assert.True(sut.Uow.Saves > 0);
     }

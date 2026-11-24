@@ -1,4 +1,5 @@
 using Bassign.Application.Notifications.Jobs;
+using Bassign.Application.Privacy;
 using Hangfire;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,15 @@ public sealed class NotificationJobs(ISender sender, ILogger<NotificationJobs> l
     [AutomaticRetry(Attempts = 0, OnAttemptsExceeded = AttemptsExceededAction.Delete)]
     public async Task DigestsAsync(CancellationToken cancellationToken) =>
         Log("digests", await sender.Send(new SendDailyDigestsCommand(), cancellationToken));
+
+    /// <summary>Spec §7: hard-delete data past its retention period. Daily, idempotent.</summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 1800)]
+    [AutomaticRetry(Attempts = 0, OnAttemptsExceeded = AttemptsExceededAction.Delete)]
+    public async Task RetentionAsync(CancellationToken cancellationToken)
+    {
+        var report = await sender.Send(new ApplyRetentionCommand(), cancellationToken);
+        if (report.Total > 0) logger.LogInformation("Retention removed {Total} record(s).", report.Total);
+    }
 
     private void Log(string job, int queued)
     {

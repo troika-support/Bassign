@@ -13,7 +13,8 @@ public sealed record UnlinkWhatsAppCommand : IRequest<Result<Unit>>, IAuditableR
     public string? AuditEntityId => null;
 }
 
-public sealed class UnlinkWhatsAppHandler(IWhatsAppBindingRepository bindings, IUnitOfWork uow, ICurrentUser currentUser)
+public sealed class UnlinkWhatsAppHandler(
+    IWhatsAppBindingRepository bindings, IUnitOfWork uow, ICurrentUser currentUser, Privacy.IConsentRegister consents, TimeProvider clock)
     : IRequestHandler<UnlinkWhatsAppCommand, Result<Unit>>
 {
     public async ValueTask<Result<Unit>> Handle(UnlinkWhatsAppCommand request, CancellationToken cancellationToken)
@@ -23,6 +24,7 @@ public sealed class UnlinkWhatsAppHandler(IWhatsAppBindingRepository bindings, I
             return Unit.Value;   // nothing linked: already in the desired state
 
         binding.Unlink();
+        consents.Record(currentUser.UserId, Privacy.ConsentPurposes.WhatsApp, granted: false, source: "profile:unlink", at: clock.GetUtcNow());
         await uow.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }

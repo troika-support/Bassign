@@ -1,3 +1,5 @@
+using Bassign.Infrastructure.Hosting;
+using Microsoft.AspNetCore.Components.Authorization;
 using Bassign.Infrastructure.Jobs;
 using Hangfire;
 using System.Security.Claims;
@@ -25,8 +27,10 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((context, loggerConfig) =>
-    loggerConfig.ReadFrom.Configuration(context.Configuration).WriteTo.Console());
+builder.Host.UseSerilog((context, loggerConfig) => loggerConfig
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()   // CorrelationId on every line of a request
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {CorrelationId}{NewLine}{Exception}", formatProvider: System.Globalization.CultureInfo.InvariantCulture));
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddMudServices();
@@ -37,6 +41,8 @@ builder.Services.AddScoped<ICurrentUser, WebCurrentUser>();   // overrides the H
 builder.Services.AddScoped<IUiSender, UiSender>();   // one DI scope (and DbContext) per UI operation
 builder.Services.AddScoped<OrgClock>();
 builder.Services.AddScoped<TaskListEvents>();   // "tasks changed" signal within a circuit
+builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingAuthStateProvider>();   // signs out deactivated users' open circuits
+builder.Services.AddBassignHardening(HangfireSetup.IsEnabled(builder.Configuration), jobServerCheck: true);
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -45,6 +51,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.AccessDeniedPath = "/sign-in";
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
+        options.Cookie.Name = "bassign.auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+        options.Events.OnValidatePrincipal = CookieRevalidation.ValidateAsync;   // deactivated ⇒ signed out within 5 min
     });
 builder.Services.AddBassignAuthorization();
 builder.Services.AddCascadingAuthenticationState();
@@ -70,15 +81,29 @@ if (app.Environment.IsDevelopment())
     }
 }
 
-app.UseSerilogRequestLogging();
+app.UseBassignCorrelationId();
+app.UseSerilogRequestLogging(options =>
+{
+    // Invite links carry a secret token in the path: never write it to the logs.
+    options.GetMessageTemplateProperties = (context, path, elapsed, status) =>
+    [
+        new Serilog.Events.LogEventProperty("RequestMethod", new Serilog.Events.ScalarValue(context.Request.Method)),
+        new Serilog.Events.LogEventProperty("RequestPath", new Serilog.Events.ScalarValue(
+            path.StartsWith("/invite/", StringComparison.OrdinalIgnoreCase) ? "/invite/[Redacted]" : path)),
+        new Serilog.Events.LogEventProperty("StatusCode", new Serilog.Events.ScalarValue(status)),
+        new Serilog.Events.LogEventProperty("Elapsed", new Serilog.Events.ScalarValue(elapsed))
+    ];
+});
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
 app.UseHttpsRedirection();
+app.UseBassignSecurityHeaders(HostKind.Web, app.Environment.IsDevelopment());
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapStaticAssets();   // fingerprinted, compressed, long-cached static files
@@ -93,6 +118,7 @@ if (HangfireSetup.IsEnabled(app.Configuration))
     });
 }
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+app.MapBassignHealth();   // /health, /health/live, /health/ready
 
 app.MapPost("/account/login", async (
     HttpContext http,
@@ -107,7 +133,7 @@ app.MapPost("/account/login", async (
 
     await SignInAsync(http, users, user);
     return Results.LocalRedirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl);
-});
+}).RequireRateLimiting(Hardening.AuthPolicy);
 
 // Invite acceptance: create the account via the Application command, then sign the new member in.
 app.MapPost("/account/accept-invite", async (
@@ -139,7 +165,18 @@ app.MapPost("/account/accept-invite", async (
 
     await SignInAsync(http, users, user);
     return Results.LocalRedirect("/");
-});
+}).RequireRateLimiting(Hardening.AuthPolicy);
+
+// Right of access / portability: download everything Bassign holds about you (JSON).
+app.MapGet("/account/my-data", async (HttpContext http, IServiceScopeFactory scopes) =>
+{
+    await using var scope = scopes.CreateAsyncScope();
+    scope.ServiceProvider.GetRequiredService<UserContext>().UserId = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    var export = await scope.ServiceProvider.GetRequiredService<ISender>().Send(new Bassign.Application.Privacy.ExportMyDataQuery());
+    if (export is null) return Results.NotFound();
+    var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(export, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true });
+    return Results.File(json, "application/json", $"bassign-my-data-{DateTime.UtcNow:yyyyMMdd}.json");
+}).RequireAuthorization();
 
 // Proof-of-work photos (stored by the API's /sync/proof) for managers reviewing a task.
 app.MapGet("/proof/{reference}", async (string reference, IProofStore store, CancellationToken ct) =>

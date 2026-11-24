@@ -1,6 +1,7 @@
 using Bassign.Application.Common.Email;
 using Bassign.Application.Organizations;
 using Bassign.Application.Teams;
+using Bassign.Domain.Common;
 using Bassign.Domain.Organizations;
 using Bassign.Infrastructure.Email;
 using Microsoft.Extensions.Logging;
@@ -21,11 +22,11 @@ public sealed class EmailInviteNotifier(
         try
         {
             await sender.SendAsync(new EmailMessage(email, null, subject, html, text), cancellationToken);
-            logger.LogInformation("Invite email sent to {Email} as {Role}; expires {ExpiresAt:u}", email, role, expiresAt);
+            logger.LogInformation("Invite email sent to {Email} as {Role}; expires {ExpiresAt:u}", Pii.MaskEmail(email), role, expiresAt);
         }
         catch (EmailSendException ex)
         {
-            logger.LogWarning("Invite email to {Email} failed: {Error}", email, ex.Message);
+            logger.LogWarning("Invite email to {Email} failed: {Error}", Pii.MaskEmail(email), ex.Message);
         }
     }
 }

@@ -71,7 +71,8 @@
         _orgName = org.Name;
         _initial = org.Name.Trim() is { Length: > 0 } n ? n[..1].ToUpperInvariant() : "B";
         _theme = BassignTheme.Build(org.AccentHex);
-        _brandCss = $":root{{--ba-accent:{org.AccentHex};--ba-accent-600:{BrandColors.Shade(org.AccentHex, 0.15)};--ba-accent-tint:{BrandColors.Tint(org.AccentHex, 0.90)};}}";
+        var accent = Bassign.Domain.Common.ColorContrast.AccessibleOnWhite(org.AccentHex);   // AAA: ≥7:1 with white
+        _brandCss = $":root{{--ba-accent:{accent};--ba-accent-600:{BrandColors.Shade(accent, 0.15)};--ba-accent-tint:{BrandColors.Tint(org.AccentHex, 0.90)};}}";
     }
 
     private async Task NewTask()

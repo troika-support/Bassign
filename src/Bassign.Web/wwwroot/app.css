@@ -156,7 +156,9 @@ body { font-family: Inter, system-ui, "Segoe UI", sans-serif; margin: 0; }
 /* ---------- Profile & WhatsApp (12b) ---------- */
 .visually-hidden { position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .ba-muted { color:var(--ba-muted); font-size:.9rem; }
-.ba-facts { display:grid; grid-template-columns:max-content 1fr; gap:8px 20px; margin:0; font-size:.92rem; }
+.ba-facts { display:grid; grid-template-columns:max-content 1fr; gap:4px 20px; margin:0; font-size:.92rem; align-items:center; }
+.ba-facts dt, .ba-facts dd { min-height:36px; display:flex; align-items:center; }
+.ba-facts__value { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .ba-facts dt { color:var(--ba-muted); }
 .ba-facts dd { margin:0; color:var(--ba-ink); overflow-wrap:anywhere; }
 .ba-wa-linked { display:flex; align-items:center; gap:6px; margin:0 0 8px; color:var(--ba-ink); }
@@ -201,7 +203,7 @@ body { font-family: Inter, system-ui, "Segoe UI", sans-serif; margin: 0; }
 .ba-sim__compose { display:flex; align-items:center; gap:8px; padding:8px; background:#F0F2F5; }
 .ba-sim__input { flex:1; min-height:40px; border:1px solid #8A929E; border-radius:20px; padding:0 14px; font:inherit; background:#fff; color:#111B21; }
 .ba-sim__attach, .ba-sim__send { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; border:0; cursor:pointer; color:#3B4A54; background:transparent; }
-.ba-sim__send { background:#00704A; color:#fff; }
+.ba-sim__send { background:#006543; color:#fff; }
 .ba-sim__send:disabled { background:#8A929E; cursor:default; }
 @media (prefers-reduced-motion: no-preference) { .ba-sim__chat { scroll-behavior:smooth; } }
 
@@ -227,3 +229,13 @@ body { font-family: Inter, system-ui, "Segoe UI", sans-serif; margin: 0; }
 .ba-ai__tag { margin-left:8px; font-size:.72rem; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--ba-accent-tint); color:var(--ba-ink); }
 .ba-summary__head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
 .ba-summary__text { margin:0 0 6px; color:var(--ba-ink); line-height:1.6; max-width:80ch; }
+
+/* ---------- Privacy (15) ---------- */
+.ba-privacy { max-width:720px; width:100%; padding:32px; line-height:1.6; color:var(--ba-ink); }
+.ba-privacy h2 { font-size:1.05rem; margin:24px 0 8px; }
+.ba-privacy ul { padding-left:20px; margin:0 0 8px; }
+.ba-consents { margin:0; padding-left:18px; font-size:.9rem; line-height:1.8; }
+
+.ba-datastrip { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.ba-datastrip__text { flex:1 1 320px; min-width:0; }
+.ba-lead { margin:0 0 16px; }

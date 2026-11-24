@@ -5,6 +5,7 @@
 @using Bassign.Application.Messaging.GetMyWhatsApp
 @using Bassign.Application.Messaging.StartLink
 @using Bassign.Application.Messaging.Unlink
+@using Bassign.Application.Privacy
 @inject IUiSender Sender
 @inject ISnackbar Snackbar
 @inject IWebHostEnvironment Env
@@ -21,11 +22,26 @@
         <section class="ba-card pa-5 ba-fill" aria-labelledby="acct-h">
             <h2 class="ba-section-label" id="acct-h">Account</h2>
             <dl class="ba-facts">
-                <dt>Name</dt><dd>@_name</dd>
+                <dt>Name</dt>
+                <dd>
+                    @if (_editingName)
+                    {
+                        <form @onsubmit="SaveName" class="d-flex gap-2 align-start">
+                            <MudTextField @bind-Value="_newName" Label="Your name" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100" AutoFocus="true" />
+                            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1" Disabled="_busy">Save</MudButton>
+                            <MudButton Variant="Variant.Text" Class="mt-1" OnClick="() => _editingName = false">Cancel</MudButton>
+                        </form>
+                    }
+                    else
+                    {
+                        <span class="ba-facts__value">@_name <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Edit" OnClick="StartEditName" aria-label="Edit your name">Edit</MudButton></span>
+                    }
+                </dd>
                 <dt>Email</dt><dd>@_email</dd>
                 <dt>Role</dt><dd>@(_roles.Count == 0 ? "Staff" : string.Join(", ", _roles))</dd>
             </dl>
         </section>
+
     </MudItem>
 
     <MudItem xs="12" md="7">
@@ -46,7 +62,7 @@
                     <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" aria-hidden="true" />
                     Linked to <strong>@_status.MaskedPhone</strong>
                 </p>
-                <p class="ba-muted">New tasks arrive on WhatsApp. Reply with the buttons to accept, decline or mark done — or send TASKS to see your list.</p>
+                <p class="ba-muted ba-lead">New tasks arrive on WhatsApp. Reply with the buttons to accept, decline or mark done — or send TASKS to see your list.</p>
 
                 @if (_confirmUnlink)
                 {
@@ -89,9 +105,28 @@
             }
             else
             {
-                <p class="ba-muted">Get new tasks on WhatsApp and act on them with one tap — no app or data bundle needed for the basics.</p>
+                <p class="ba-muted ba-lead">Get new tasks on WhatsApp and act on them with one tap — no app or data bundle needed for the basics.</p>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" StartIcon="@Icons.Material.Filled.Link" OnClick="StartLink">Link WhatsApp</MudButton>
             }
+        </section>
+    </MudItem>
+    <MudItem xs="12" md="12">
+        <section class="ba-card pa-5 ba-datastrip" aria-labelledby="privacy-h">
+            <div class="ba-datastrip__text">
+                <h2 class="ba-section-label" id="privacy-h">Your data</h2>
+                <p class="ba-muted" style="margin:0;">See what Bassign holds about you and why in the <a class="ba-link" href="/privacy">privacy notice</a>.</p>
+                @if (_consents.Count > 0)
+                {
+                    <h3 class="ba-section-label mt-4">Consent history</h3>
+                    <ul class="ba-consents">
+                        @foreach (var c in _consents)
+                        {
+                            <li>@ConsentLabel(c) · <span class="ba-muted">@c.At.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span></li>
+                        }
+                    </ul>
+                }
+            </div>
+            <MudButton Variant="Variant.Outlined" Href="/account/my-data" Target="_blank" download="bassign-my-data.json" StartIcon="@Icons.Material.Outlined.Download">Download my data</MudButton>
         </section>
     </MudItem>
 </MudGrid>
@@ -105,6 +140,38 @@
     private WhatsAppLinkStarted? _link;
     private bool _busy, _confirmUnlink, _copied;
     private readonly CancellationTokenSource _cts = new();
+    private bool _editingName;
+    private string _newName = "";
+    private IReadOnlyList<ConsentEntry> _consents = [];
+
+    private void StartEditName()
+    {
+        _newName = _name;
+        _editingName = true;
+    }
+
+    private async Task SaveName()
+    {
+        _busy = true;
+        var result = await Sender.TrySend(new UpdateMyNameCommand(_newName));
+        _busy = false;
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error.Message, Severity.Error);
+            return;
+        }
+        _name = _newName.Trim();
+        _editingName = false;
+        Snackbar.Add("Name updated. It shows everywhere after you next sign in.", Severity.Success);
+    }
+
+    private static string ConsentLabel(ConsentEntry c) => (c.Purpose, c.Granted) switch
+    {
+        (ConsentPurposes.PrivacyNotice, _) => $"Accepted the privacy notice (v{c.Version})",
+        (ConsentPurposes.WhatsApp, true) => "Agreed to WhatsApp messages",
+        (ConsentPurposes.WhatsApp, false) => "Withdrew WhatsApp consent",
+        _ => c.Purpose
+    };
     private TimeZoneInfo _zone = TimeZoneInfo.Utc;
 
     private string Time(DateTimeOffset at) =>
@@ -121,6 +188,7 @@
             _roles = user.FindAll(ClaimTypes.Role).Select(c => c.Value).Distinct().ToList();
         }
         _status = await Sender.Send(new GetMyWhatsAppQuery());
+        _consents = await Sender.Send(new GetMyConsentsQuery());
     }
 
     private async Task StartLink()

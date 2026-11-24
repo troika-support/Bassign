@@ -13,4 +13,8 @@ public interface IIdentityAdmin
     Task<Result<string>> CreateUserAsync(string email, string displayName, string password, string role, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TeamMember>> ListMembersAsync(CancellationToken cancellationToken = default);
     Task<Result<Unit>> SetActiveAsync(string userId, bool isActive, CancellationToken cancellationToken = default);
+
+    /// <summary>Right to rectification: a person corrects their own name.</summary>
+    Task<Result<Unit>> UpdateDisplayNameAsync(string userId, string displayName, CancellationToken cancellationToken = default) =>
+        Task.FromResult<Result<Unit>>(new Error("identity.unsupported", "Not supported."));
 }

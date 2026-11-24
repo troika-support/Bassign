@@ -15,7 +15,7 @@ public sealed class OrganizationController(ISender sender) : ControllerBase
     public async Task<ActionResult<BrandingResponse>> Branding(CancellationToken ct)
     {
         var org = await sender.Send(new GetOrganizationQuery(), ct);
-        return Ok(new BrandingResponse(org.Name, org.AccentHex));
+        return Ok(new BrandingResponse(org.Name, Bassign.Domain.Common.ColorContrast.AccessibleOnWhite(org.AccentHex)));   // AAA-safe accent
     }
 }
 

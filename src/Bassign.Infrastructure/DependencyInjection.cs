@@ -1,5 +1,6 @@
 using Bassign.Application.Ai;
 using Bassign.Application.Common.Auditing;
+using Bassign.Application.Privacy;
 using Bassign.Application.Common.Email;
 using Bassign.Application.Common.Persistence;
 using Bassign.Application.Common.Security;
@@ -17,6 +18,9 @@ using Bassign.Application.Teams;
 using Bassign.Infrastructure.Ai;
 using Bassign.Infrastructure.Email;
 using Bassign.Infrastructure.Options;
+using Bassign.Infrastructure.Privacy;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Options;
 using Bassign.Infrastructure.Persistence;
 using Bassign.Infrastructure.Auditing;
 using Bassign.Infrastructure.Identity;
@@ -53,6 +57,33 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>();
 
         services.AddHttpContextAccessor();
+
+        // Data Protection keys (cookies, antiforgery): persisted so restarts don't sign everyone out, and
+        // encrypted at rest with DPAPI (machine key) on Windows/IIS. Set DataProtection:KeysPath on IIS.
+        var keysPath = configuration["DataProtection:KeysPath"] is { Length: > 0 } configured
+            ? configured
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bassign", "keys");
+        var dataProtection = services.AddDataProtection()
+            .SetApplicationName("Bassign")
+            .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+        if (OperatingSystem.IsWindows())
+            dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: true);
+
+        // Startup validation: misconfiguration fails fast with a readable message (secrets never echoed).
+        services.AddSingleton<IValidateOptions<WhatsAppOptions>, WhatsAppOptionsValidator>();
+        services.AddSingleton<IValidateOptions<EmailOptions>, EmailOptionsValidator>();
+        services.AddSingleton<IValidateOptions<AiOptions>, AiOptionsValidator>();
+        services.AddOptions<WhatsAppOptions>().ValidateOnStart();
+        services.AddOptions<EmailOptions>().ValidateOnStart();
+        services.AddOptions<AiOptions>().ValidateOnStart();
+
+        // Privacy (Cyber and Data Protection Act): consent register, access/erasure, retention.
+        services.AddScoped<IConsentRegister, ConsentRegister>();
+        services.AddScoped<IPersonalDataExporter, PersonalDataExporter>();
+        services.AddScoped<IPersonalDataEraser, PersonalDataEraser>();
+        services.AddScoped<IRetentionStore, RetentionStore>();
+        services.AddOptions<RetentionOptions>().Bind(configuration.GetSection(RetentionOptions.Section));
+        services.AddSingleton(sp => sp.GetRequiredService<IOptions<RetentionOptions>>().Value.ToPolicy());
 
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();

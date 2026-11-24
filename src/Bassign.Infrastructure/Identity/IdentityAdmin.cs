@@ -77,6 +77,16 @@ public sealed class IdentityAdmin(
             .ToList();
     }
 
+    public async Task<Result<Unit>> UpdateDisplayNameAsync(string userId, string displayName, CancellationToken cancellationToken = default)
+    {
+        var user = await users.FindByIdAsync(userId);
+        if (user is null || user.ErasedAt is not null)
+            return new Error("identity.not_found", "Account not found.");
+        user.DisplayName = displayName;
+        var updated = await users.UpdateAsync(user);
+        return updated.Succeeded ? Unit.Value : new Error("identity.update", string.Join(" ", updated.Errors.Select(e => e.Description)));
+    }
+
     public async Task<Result<Unit>> SetActiveAsync(string userId, bool isActive, CancellationToken cancellationToken = default)
     {
         var user = await users.FindByIdAsync(userId);

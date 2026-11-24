@@ -1,3 +1,5 @@
+using Bassign.Infrastructure.Hosting;
+using Microsoft.AspNetCore.RateLimiting;
 using Bassign.Application.Identity;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +9,7 @@ namespace Bassign.Api.Controllers;
 
 [ApiController]
 [Route("auth")]
+[EnableRateLimiting(Hardening.AuthPolicy)]
 public sealed class AuthController(IAuthService auth) : ControllerBase
 {
     [AllowAnonymous]

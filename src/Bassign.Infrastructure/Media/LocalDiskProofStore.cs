@@ -36,4 +36,14 @@ public sealed class LocalDiskProofStore(IOptions<MediaOptions> options) : IProof
         var contentType = reference.EndsWith(".png", StringComparison.Ordinal) ? "image/png" : "image/jpeg";
         return Task.FromResult<ProofFile?>(new ProofFile(File.OpenRead(path), contentType));
     }
+
+    public Task DeleteAsync(string reference, CancellationToken cancellationToken = default)
+    {
+        if (ProofReferences.IsValid(reference))
+        {
+            var path = Path.Combine(_root, reference);
+            if (File.Exists(path)) File.Delete(path);
+        }
+        return Task.CompletedTask;
+    }
 }

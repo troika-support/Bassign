@@ -10,6 +10,9 @@ public interface IProofStore
     /// <summary>Idempotent per id: re-uploading the same id overwrites, so retries are safe.</summary>
     Task<string> SaveAsync(Guid id, Stream content, string contentType, CancellationToken cancellationToken = default);
     Task<ProofFile?> OpenAsync(string reference, CancellationToken cancellationToken = default);
+
+    /// <summary>Retention / erasure. Missing files are not an error.</summary>
+    Task DeleteAsync(string reference, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
 public static partial class ProofReferences

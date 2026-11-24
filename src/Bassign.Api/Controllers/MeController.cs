@@ -1,6 +1,7 @@
 using Bassign.Application.Messaging.GetMyWhatsApp;
 using Bassign.Application.Messaging.StartLink;
 using Bassign.Application.Messaging.Unlink;
+using Bassign.Application.Privacy;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -35,4 +36,21 @@ public sealed class MeController(ISender sender) : ControllerBase
             ? NoContent()
             : Problem(statusCode: StatusCodes.Status400BadRequest, title: result.Error.Message, type: result.Error.Code);
     }
+
+    /// <summary>Right of access / portability: everything Bassign holds about you, as JSON.</summary>
+    [HttpGet("data")]
+    public async Task<IActionResult> MyData(CancellationToken ct) =>
+        await sender.Send(new ExportMyDataQuery(), ct) is { } export ? Ok(export) : NotFound();
+
+    /// <summary>Right to rectification: correct your display name.</summary>
+    [HttpPut("name")]
+    public async Task<IActionResult> UpdateName([FromBody] UpdateNameRequest body, CancellationToken ct)
+    {
+        var result = await sender.Send(new UpdateMyNameCommand(body.DisplayName), ct);
+        return result.IsSuccess
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status400BadRequest, title: result.Error.Message, type: result.Error.Code);
+    }
 }
+
+public sealed record UpdateNameRequest(string DisplayName);

@@ -23,6 +23,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<OutboundNotification> OutboundNotifications => Set<OutboundNotification>();
     public DbSet<OrganizationSettings> OrganizationSettings => Set<OrganizationSettings>();
     public DbSet<Bassign.Infrastructure.Ai.AiUsageRecord> AiUsage => Set<Bassign.Infrastructure.Ai.AiUsageRecord>();
+    public DbSet<Bassign.Infrastructure.Privacy.ConsentRecord> Consents => Set<Bassign.Infrastructure.Privacy.ConsentRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

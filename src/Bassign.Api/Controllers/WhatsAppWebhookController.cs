@@ -1,8 +1,10 @@
 using System.Text;
+using Bassign.Infrastructure.Hosting;
 using Bassign.Infrastructure.Options;
 using Bassign.Infrastructure.WhatsApp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace Bassign.Api.Controllers;
@@ -15,6 +17,7 @@ namespace Bassign.Api.Controllers;
 [ApiController]
 [Route("webhooks/whatsapp/{token}")]
 [AllowAnonymous]
+[EnableRateLimiting(Hardening.WebhookPolicy)]
 public sealed class WhatsAppWebhookController(
     IOptions<WhatsAppOptions> options,
     WhatsAppWebhookIntake intake,

@@ -1,6 +1,7 @@
 using Bassign.Api;
 using Bassign.Application;
 using Bassign.Infrastructure;
+using Bassign.Infrastructure.Hosting;
 using Bassign.Infrastructure.Identity;
 using Bassign.Infrastructure.Jobs;
 using Bassign.Infrastructure.Options;
@@ -11,8 +12,10 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((context, loggerConfig) =>
-    loggerConfig.ReadFrom.Configuration(context.Configuration).WriteTo.Console());
+builder.Host.UseSerilog((context, loggerConfig) => loggerConfig
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()   // CorrelationId on every line of a request
+    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {CorrelationId}{NewLine}{Exception}", formatProvider: System.Globalization.CultureInfo.InvariantCulture));
 
 builder.Services
     .AddApplication()
@@ -21,7 +24,9 @@ builder.Services
 
 builder.Services.AddBassignJwtAuth(builder.Configuration);
 builder.Services.AddBassignWorkers();   // notification sender + WhatsApp inbox — this host only
-builder.Services.AddBassignJobs(builder.Configuration, processJobs: true);   // Hangfire: reminders, escalations, digests
+builder.Services.AddBassignJobs(builder.Configuration, processJobs: true);   // Hangfire: reminders, escalations, digests, retention
+builder.Services.AddBassignHardening(HangfireSetup.IsEnabled(builder.Configuration), jobServerCheck: true);
+// No CORS: the API serves the native phone app only, so browsers on other origins are refused by default.
 
 // Options bound from config, validated at startup. Secrets never live in source:
 // the DB connection string comes from appsettings.Development.json (dev) or an env var (prod).
@@ -49,6 +54,7 @@ if (app.Environment.IsDevelopment())
     }
 }
 
+app.UseBassignCorrelationId();
 app.UseExceptionHandler();
 app.UseSerilogRequestLogging(options =>
 {
@@ -62,10 +68,16 @@ app.UseSerilogRequestLogging(options =>
         new Serilog.Events.LogEventProperty("Elapsed", new Serilog.Events.ScalarValue(elapsed))
     ];
 });
+app.UseBassignSecurityHeaders(HostKind.Api, app.Environment.IsDevelopment());
+if (!app.Environment.IsDevelopment()) app.UseHsts();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.MapControllers();
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "Bassign.Api" }));
+app.MapBassignHealth();   // /health, /health/live, /health/ready
 
 Log.Information("Bassign API starting");
 app.Run();
+
+/// <summary>Exposed for WebApplicationFactory in the integration tests.</summary>
+public partial class Program;

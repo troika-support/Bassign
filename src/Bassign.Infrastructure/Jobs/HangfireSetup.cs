@@ -60,6 +60,7 @@ public sealed class RecurringJobsRegistrar(IRecurringJobManager jobs, ILogger<Re
             jobs.AddOrUpdate<NotificationJobs>("reminders", j => j.RemindersAsync(CancellationToken.None), "*/5 * * * *", new RecurringJobOptions());
             jobs.AddOrUpdate<NotificationJobs>("escalations", j => j.EscalationsAsync(CancellationToken.None), "*/5 * * * *", new RecurringJobOptions());
             jobs.AddOrUpdate<NotificationJobs>("daily-digest", j => j.DigestsAsync(CancellationToken.None), "*/15 * * * *", new RecurringJobOptions());
+            jobs.AddOrUpdate<NotificationJobs>("retention", j => j.RetentionAsync(CancellationToken.None), "30 0 * * *", new RecurringJobOptions());   // 02:30 Harare
         }
         catch (Exception ex)
         {

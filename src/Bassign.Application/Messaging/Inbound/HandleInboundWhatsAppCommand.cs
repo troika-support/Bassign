@@ -37,6 +37,7 @@ public sealed partial class HandleInboundWhatsAppHandler(
     IUserDirectory users,
     IProofStore proofs,
     IUnitOfWork uow,
+    Privacy.IConsentRegister consents,
     TimeProvider clock) : IRequestHandler<HandleInboundWhatsAppCommand, IReadOnlyList<WhatsAppOutbound>>
 {
     private const int MaxLinkAttemptsPerHour = 6;
@@ -85,6 +86,7 @@ public sealed partial class HandleInboundWhatsAppHandler(
             return new WaText(phone, "This WhatsApp number is already linked to another Bassign account. Ask your manager for help.");
 
         pending.Verify(phone, now);
+        consents.Record(pending.UserId, Privacy.ConsentPurposes.WhatsApp, granted: true, source: "whatsapp:link", at: now);
         await uow.SaveChangesAsync(ct);
 
         var name = (await users.GetDisplayNamesAsync([pending.UserId], ct)).GetValueOrDefault(pending.UserId, "there");

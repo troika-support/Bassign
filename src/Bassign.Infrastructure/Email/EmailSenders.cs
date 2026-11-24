@@ -35,7 +35,7 @@ public sealed class PickupFolderEmailSender(IOptions<EmailOptions> options, Time
             .Append("--").Append(boundary).Append("--\r\n");
 
         await File.WriteAllTextAsync(path, eml.ToString(), Encoding.ASCII, cancellationToken);
-        logger.LogInformation("Email to {To} written to {Path}", message.ToAddress, path);
+        logger.LogInformation("Email to {To} written to {Path}", Bassign.Domain.Common.Pii.MaskEmail(message.ToAddress), path);
     }
 
     private static string Address(string? name, string address) =>

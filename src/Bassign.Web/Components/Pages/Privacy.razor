@@ -1,0 +1,54 @@
+@page "/privacy"
+@layout Bassign.Web.Components.Layout.AuthLayout
+@attribute [AllowAnonymous]
+@using Bassign.Application.Organizations.GetOrganization
+@using Bassign.Application.Privacy
+@inject IUiSender Sender
+
+<PageTitle>Privacy notice · Bassign</PageTitle>
+
+<article class="ba-card ba-privacy" aria-labelledby="privacy-h">
+    <p class="ba-muted" style="margin:0 0 4px;">@_org · version @ConsentPurposes.CurrentNoticeVersion</p>
+    <h1 id="privacy-h" class="ba-page-title">Privacy notice</h1>
+    <p>@_org uses Bassign to assign and track work. This notice explains what personal information it holds about you, why, and your rights under Zimbabwe's Cyber and Data Protection Act (Chapter 12:07).</p>
+
+    <h2>What we hold</h2>
+    <ul>
+        <li><strong>Your account:</strong> name, work email, role, and whether your account is active.</li>
+        <li><strong>Your work:</strong> tasks assigned to or created by you, their status and times, and proof-of-work photos you send.</li>
+        <li><strong>WhatsApp (only if you link it):</strong> your number and the messages you exchange with the Bassign number.</li>
+        <li><strong>Activity records:</strong> who changed what and when (an audit trail), and sign-in sessions.</li>
+    </ul>
+
+    <h2>Why</h2>
+    <p>To run @_org's work: assigning tasks, reminding you about them, showing managers progress, and keeping a reliable record. We don't use your information for advertising and don't sell it.</p>
+
+    <h2>Who else processes it</h2>
+    <ul>
+        <li><strong>WhatsApp (Meta) and its provider (360dialog)</strong> — only if you link WhatsApp.</li>
+        <li><strong>Email delivery (SendGrid)</strong> — to send you notifications and invites.</li>
+        <li><strong>An AI provider</strong> — task titles and team names may be sent to suggest who should do a task and to write a daily summary for managers. Suggestions are always checked by a person.</li>
+    </ul>
+    <p>Some of these services store data outside Zimbabwe. @_org remains responsible for your information.</p>
+
+    <h2>How long</h2>
+    <p>WhatsApp messages: 90 days. Notifications: 90 days. Proof photos: one year after the task is done. The audit trail is kept longer for accountability. Details are set by @_org.</p>
+
+    <h2>Your rights</h2>
+    <ul>
+        <li><strong>See and take a copy</strong> — Profile → <em>Download my data</em>.</li>
+        <li><strong>Correct</strong> your name — Profile → <em>Edit</em>. Ask an Admin to correct anything else.</li>
+        <li><strong>Withdraw WhatsApp consent</strong> — Profile → <em>Unlink WhatsApp</em>.</li>
+        <li><strong>Erasure</strong> — when you leave, ask an Admin to erase your personal data. Your name and contact details are removed; the organisation's task history stays without them.</li>
+        <li><strong>Complain</strong> — to @_org first, or to the Data Protection Authority (POTRAZ).</li>
+    </ul>
+
+    <p style="margin-top:24px;"><a class="ba-link" href="/">Back to Bassign</a></p>
+</article>
+
+@code {
+    private string _org = "Your organisation";
+
+    protected override async Task OnInitializedAsync() =>
+        _org = (await Sender.Send(new GetOrganizationQuery())).Name;
+}

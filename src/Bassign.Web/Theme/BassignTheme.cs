@@ -16,14 +16,14 @@ public static class BassignTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary        = "#4F46E5",   // indigo accent (brand override per install); white-on 6.2 AAA
+            Primary        = "#423BC0",   // indigo accent (brand override per install); white-on 8.0 AAA
             Background     = "#F6F7F9",   // grey canvas
             Surface        = "#FFFFFF",   // white cards
             TextPrimary    = "#16191D",    // AAA 17.6
             TextSecondary  = "#44505E",    // AAA 8.2
-            Success        = "#0B7A3B",
-            Warning        = "#B0520A",
-            Error          = "#C01B1B",
+            Success        = "#085D2D",
+            Warning        = "#823D07",
+            Error          = "#9D1616",
             LinesDefault   = "#E3E7EC",
             TableLines     = "#E3E7EC",
             DrawerBackground = "#FFFFFF",
@@ -38,8 +38,8 @@ public static class BassignTheme
             TextPrimary    = "#E7EAEE",    // AAA 14.8
             TextSecondary  = "#AEB6C0",    // AAA 8.7
             Success        = "#56D08A",
-            Warning        = "#F0A24B",
-            Error          = "#FF8585",
+            Warning        = "#F1A551",
+            Error          = "#FF9999",
             LinesDefault   = "#2A313A",
             TableLines     = "#2A313A",
             DrawerBackground = "#1A1F26",
@@ -72,7 +72,7 @@ public static class BassignTheme
     {
         var theme = Base();
         if (!string.IsNullOrWhiteSpace(accentHex))
-            theme.PaletteLight.Primary = accentHex;
+            theme.PaletteLight.Primary = Bassign.Domain.Common.ColorContrast.AccessibleOnWhite(accentHex);   // AAA 7:1 with white text
         return theme;
     }
 }

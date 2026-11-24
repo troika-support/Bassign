@@ -23,7 +23,8 @@ public sealed class AcceptInviteCommandValidator : AbstractValidator<AcceptInvit
 }
 
 public sealed class AcceptInviteHandler(
-    IInvitationRepository invites, IIdentityAdmin identity, ISecureTokens tokens, IUnitOfWork uow, TimeProvider clock)
+    IInvitationRepository invites, IIdentityAdmin identity, ISecureTokens tokens, IUnitOfWork uow, TimeProvider clock,
+    Privacy.IConsentRegister consents)
     : IRequestHandler<AcceptInviteCommand, Result<AcceptedInvite>>
 {
     public async ValueTask<Result<AcceptedInvite>> Handle(AcceptInviteCommand request, CancellationToken cancellationToken)
@@ -39,6 +40,7 @@ public sealed class AcceptInviteHandler(
             return created.Error;
 
         invitation.Accept(created.Value!, now);
+        consents.Record(created.Value!, Privacy.ConsentPurposes.PrivacyNotice, granted: true, source: "invite", at: now);
         await uow.SaveChangesAsync(cancellationToken);
 
         return new AcceptedInvite(created.Value!, invitation.Email, invitation.Role);

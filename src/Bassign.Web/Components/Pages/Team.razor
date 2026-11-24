@@ -32,17 +32,29 @@ else
                         <span class="ba-avatar">@Initials(m.Name)</span>
                         <div style="flex:1; min-width:0;">
                             <div class="ba-workload__name">@m.Name</div>
-                            <div class="ba-workload__meta" style="overflow:hidden; text-overflow:ellipsis;">@m.Email</div>
+                            <div class="ba-workload__meta" style="overflow:hidden; text-overflow:ellipsis;">@(IsErased(m) ? "—" : m.Email)</div>
                         </div>
                         <span class="ba-pill">@m.Role</span>
-                        <span class="ba-pill @(m.IsActive ? "ba-pill--ok" : "ba-pill--off")">@(m.IsActive ? "Active" : "Inactive")</span>
-                        @if (_isAdmin)
+                        <span class="ba-pill @(m.IsActive ? "ba-pill--ok" : "ba-pill--off")">@(IsErased(m) ? "Erased" : m.IsActive ? "Active" : "Inactive")</span>
+                        @if (_isAdmin && !IsErased(m))
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ToggleActive(m))">
                                 @(m.IsActive ? "Deactivate" : "Reactivate")
                             </MudButton>
+                            @if (!m.IsActive)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => _confirmErase = m.Id)">Erase data…</MudButton>
+                            }
                         }
                     </div>
+                    @if (_confirmErase == m.Id)
+                    {
+                        <div class="ba-inline-confirm mb-3" role="alert">
+                            <span>Erase <strong>@m.Name</strong>'s personal data? Their name, email, WhatsApp link and messages, and their proof photos are removed for good. Task history stays, shown as "Former staff member". This can't be undone.</span>
+                            <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="_busyErase" OnClick="@(() => Erase(m))">Erase</MudButton>
+                            <MudButton Variant="Variant.Text" OnClick="@(() => _confirmErase = null)">Cancel</MudButton>
+                        </div>
+                    }
                 }
             </div>
         </MudItem>
@@ -160,6 +172,21 @@ else
         var r = await Sender.TrySend(new RevokeInviteCommand(invite.Id));
         Snackbar.Add(r.IsSuccess ? $"Invite for {invite.Email} revoked" : r.Error.Message,
                      r.IsSuccess ? Severity.Success : Severity.Warning);
+        await Load();
+    }
+
+    private string? _confirmErase;
+    private bool _busyErase;
+
+    private static bool IsErased(TeamMember m) => m.Email.EndsWith("@erased.invalid", StringComparison.OrdinalIgnoreCase);
+
+    private async Task Erase(TeamMember member)
+    {
+        _busyErase = true;
+        var r = await Sender.TrySend(new Bassign.Application.Privacy.EraseUserDataCommand(member.Id));
+        _busyErase = false;
+        _confirmErase = null;
+        Snackbar.Add(r.IsSuccess ? "Personal data erased." : r.Error.Message, r.IsSuccess ? Severity.Success : Severity.Warning);
         await Load();
     }
 
