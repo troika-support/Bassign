@@ -17,6 +17,19 @@
 <h1 class="ba-page-title">Profile</h1>
 <p class="ba-page-sub">Your account and how Bassign reaches you.</p>
 
+@if (PasskeyAdded == 1)
+{
+    <MudAlert Severity="Severity.Success" Class="mb-3">Passkey added. Next time, choose <b>Sign in with a passkey</b> on this device.</MudAlert>
+}
+@if (PasskeyError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-3">@PasskeyError</MudAlert>
+}
+@if (RecoveryLow == 1)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-3">You're running low on recovery codes. Make new ones in <b>Two-factor sign-in</b> below.</MudAlert>
+}
+
 <MudGrid Spacing="3">
     <MudItem xs="12" md="5">
         <section class="ba-card pa-5 ba-fill" aria-labelledby="acct-h">
@@ -110,6 +123,15 @@
             }
         </section>
     </MudItem>
+    <MudItem xs="12" md="5">
+        <TwoFactorCard />
+    </MudItem>
+    <MudItem xs="12" md="7">
+        <PasskeysCard />
+    </MudItem>
+    <MudItem xs="12" md="12">
+        <PhoneAppCard />
+    </MudItem>
     <MudItem xs="12" md="12">
         <section class="ba-card pa-5 ba-datastrip" aria-labelledby="privacy-h">
             <div class="ba-datastrip__text">
@@ -132,6 +154,10 @@
 </MudGrid>
 
 @code {
+    [SupplyParameterFromQuery] private int? RecoveryLow { get; set; }
+    [SupplyParameterFromQuery] private int? PasskeyAdded { get; set; }
+    [SupplyParameterFromQuery] private string? PasskeyError { get; set; }
+
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private string _name = "", _email = "";

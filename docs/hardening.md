@@ -38,10 +38,8 @@ Tick each item before sign-off. "Test" = covered by `dotnet test`; "Check" = ver
 - [x] **Correlation id** on every log line of a request (`X-Correlation-ID` accepted if clean, else the trace id; echoed in the response header).
 
 ## Production settings (IIS environment variables)
-```
-Auth__JwtSigningKey        48+ random characters
-WhatsApp__Provider=360dialog  WhatsApp__ApiKey  WhatsApp__BusinessNumber  WhatsApp__WebhookToken (24+ random)  WhatsApp__AppSecret
-Email__Provider=sendgrid   Email__ApiKey  Email__FromAddress  Email__PublicBaseUrl=https://<web host>
-Ai__ApiKey                 (or Ai__Provider=none)
-DataProtection__KeysPath   e.g. D:\Bassign\keys (app pool identity needs modify rights)
-```
+
+Set by `deploy/Set-BassignEnvironment.ps1` on each app pool; the full list and why is in
+[deploy-iis.md](deploy-iis.md#environment-variables). Email, WhatsApp, AI, retention and session
+settings are **Admin settings** (Settings in the web app) since step 16b — set one as an environment
+variable only to lock it for a client (e.g. `Default__Ai__ApiKey` provides your AI key without locking it).

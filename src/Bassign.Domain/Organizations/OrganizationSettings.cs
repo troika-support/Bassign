@@ -117,6 +117,26 @@ public sealed class OrganizationSettings
         return v.Length > max ? v[..max] : v;
     }
 
+    // Two-factor sign-in (decision #24). Admins always; an Admin may widen it.
+    public string? TwoFactorRequiredForSetting { get; private set; }
+    public string TwoFactorRequiredFor => TwoFactorRequiredForSetting ?? TwoFactorScopes.Admins;
+
+    /// <summary>Must a person with these roles use two-factor sign-in?</summary>
+    public bool RequiresTwoFactor(IEnumerable<string> roles)
+    {
+        var list = roles.ToList();
+        return list.Contains(Teams.TeamRoles.Admin)
+            || (TwoFactorRequiredFor == TwoFactorScopes.Managers && list.Contains(Teams.TeamRoles.Manager))
+            || TwoFactorRequiredFor == TwoFactorScopes.Everyone;
+    }
+
+    public void ConfigureTwoFactor(string requiredFor)
+    {
+        if (!TwoFactorScopes.All.Contains(requiredFor))
+            throw new ArgumentException("Choose Admins, Admins and Managers, or Everyone.", nameof(requiredFor));
+        TwoFactorRequiredForSetting = requiredFor;
+    }
+
     public void ConfigureTaskDefaults(bool proofRequiredByDefault, bool declineReasonRequired)
     {
         ProofRequiredByDefaultSetting = proofRequiredByDefault;
@@ -183,4 +203,13 @@ public sealed class OrganizationSettings
         HoldOutsideWorkingTimeSetting = holdOutsideWorkingTime;
         ObservePublicHolidaysSetting = observePublicHolidays;
     }
+}
+
+/// <summary>Who must use two-factor sign-in. Admins are always included.</summary>
+public static class TwoFactorScopes
+{
+    public const string Admins = "admins";
+    public const string Managers = "managers";   // Admins and Managers
+    public const string Everyone = "everyone";
+    public static readonly IReadOnlyList<string> All = [Admins, Managers, Everyone];
 }

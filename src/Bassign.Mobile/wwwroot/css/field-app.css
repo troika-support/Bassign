@@ -108,3 +108,13 @@ html, body { margin:0; background:var(--ba-bg); color:var(--ba-ink);
 .ba-reason:focus-within { outline:3px solid var(--ba-accent); outline-offset:2px; }
 textarea.ba-input { padding:12px 14px; min-height:72px; resize:vertical; font-family:inherit; }
 .ba-sheet { max-height:90vh; overflow-y:auto; }
+
+/* Connect */
+.ba-connect-facts { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin:8px 0 16px; padding:12px 14px;
+  border:1px solid var(--ba-line); border-radius:12px; text-align:left; }
+.ba-connect-facts dt { color:var(--ba-muted); }
+.ba-connect-facts dd { margin:0; font-weight:600; word-break:break-all; }
+.ba-sheet__switch { min-height:48px; align-self:flex-start; }
+
+/* Two-factor code */
+.ba-code-input { font-size:1.5rem; letter-spacing:.3em; text-align:center; font-variant-numeric:tabular-nums; }

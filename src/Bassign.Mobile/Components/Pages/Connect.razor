@@ -1,0 +1,125 @@
+@page "/connect"
+@inject IServerConnection Connection
+@inject ConnectDiscovery Discovery
+@inject FieldSession Session
+@inject ITaskStore Store
+@inject LocalDb LocalDb
+@inject BrandingService Branding
+@inject NavigationManager Nav
+
+<div class="ba-signin-wrap">
+    <div class="ba-card ba-signin">
+        @if (_found is null)
+        {
+            <span class="ba-orgmark" aria-hidden="true">B</span>
+            <h1>@(Connection.Current is null ? "Connect to your organisation" : "Switch organisation")</h1>
+            <p class="ba-page-sub">Scan the QR code your manager shows you with your phone's camera, or type the address they gave you.</p>
+
+            @if (_problem is not null)
+            {
+                <p class="ba-task__notice" role="alert">@_problem</p>
+            }
+
+            <form @onsubmit="FindAsync">
+                <label class="ba-label" for="server">Organisation address</label>
+                <input class="ba-input" id="server" type="url" inputmode="url" autocomplete="url" autocapitalize="none" spellcheck="false"
+                       placeholder="tasks.yourcompany.co.zw" required @bind="_address" />
+                <button class="ba-submit" type="submit" disabled="@_busy">@(_busy ? "Checking…" : "Continue")</button>
+            </form>
+
+            @if (Connection.Current is { } current)
+            {
+                <button type="button" class="ba-sheet__close" @onclick="Back">Stay with @current.OrganizationName</button>
+            }
+        }
+        else
+        {
+            @* Anti-phishing (decision #16): show exactly who and where before anything else happens. *@
+            <span class="ba-orgmark" aria-hidden="true">@_found.OrganizationName.Trim()[..1].ToUpperInvariant()</span>
+            <h1>Connect to @_found.OrganizationName?</h1>
+            <dl class="ba-connect-facts">
+                <dt>Organisation</dt><dd>@_found.OrganizationName</dd>
+                <dt>Server</dt><dd>@_found.ApiBase.Host</dd>
+            </dl>
+            <p class="ba-page-sub">Only continue if this is your employer. You'll sign in with the email they invited.</p>
+
+            @if (_switching)
+            {
+                <p class="ba-sheet__warn" role="alert">
+                    This phone is connected to @Connection.Current!.OrganizationName. Switching signs you out and removes its tasks from this phone.
+                    @if (_pending > 0)
+                    {
+                        <strong> @_pending change@(_pending == 1 ? " hasn't" : "s haven't") synced and will be lost.</strong>
+                    }
+                </p>
+            }
+
+            <button type="button" class="ba-submit" disabled="@_busy" @onclick="ConfirmAsync">
+                @(_switching ? (_pending > 0 ? "Switch and lose changes" : "Switch") : "Connect")
+            </button>
+            <button type="button" class="ba-sheet__close" @onclick="Cancel">Cancel</button>
+        }
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "server")] public string? Server { get; set; }
+
+    private string _address = "";
+    private string? _problem;
+    private bool _busy;
+    private ServerInfo? _found;
+    private bool _switching;
+    private int _pending;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(Server) && Server != _address)
+        {
+            _address = Server;
+            await FindAsync();   // from a link: look it up, but still wait for the person to confirm
+        }
+    }
+
+    private async Task FindAsync()
+    {
+        _busy = true;
+        _problem = null;
+        var result = await Discovery.DiscoverAsync(_address);
+        _busy = false;
+        if (result.Server is not { } server) { _problem = result.Problem; return; }
+
+        var current = Connection.Current;
+        if (current is not null && current.ApiBase == server.ApiBase)
+        {
+            Back();   // already connected there
+            return;
+        }
+        _switching = current is not null && await Session.GetUserAsync() is not null;
+        _pending = _switching ? await Store.PendingCountAsync() : 0;
+        _found = server;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (_found is null) return;
+        _busy = true;
+        // One organisation at a time: nothing from the previous one may stay on the phone.
+        await LocalDb.ResetAsync();
+        await Session.SignOutAsync();
+        Preferences.Default.Remove("bassign.lastUser");
+        Connection.Save(_found);
+        Branding.ResetTo(_found.OrganizationName);
+        _ = Branding.RefreshAsync();
+        _busy = false;
+        Nav.NavigateTo("/sign-in", replace: true);
+    }
+
+    private void Cancel()
+    {
+        _found = null;
+        _switching = false;
+    }
+
+    private void Back() => Nav.NavigateTo("/", replace: true);
+}

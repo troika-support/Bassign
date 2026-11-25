@@ -5,33 +5,82 @@
 @inject SyncScheduler Scheduler
 @inject BrandingService Branding
 @inject NavigationManager Nav
+@inject IServerConnection Connection
 
 <div class="ba-signin-wrap">
     <div class="ba-card ba-signin">
         <span class="ba-orgmark" aria-hidden="true">@Branding.Initial</span>
-        <h1>Sign in to @Branding.Name</h1>
-        <p class="ba-page-sub">Use the email your manager invited.</p>
-
-        @if (_error is not null)
+        @if (Session.Pending is { } pending)
         {
-            <p class="ba-task__notice" role="alert">@_error</p>
+            <h1>@(_recovery ? "Use a recovery code" : "Enter your code")</h1>
+            <p class="ba-page-sub">
+                @(_recovery ? "Type one of the recovery codes you saved when you set up two-factor sign-in. Each works once."
+                  : pending.ByEmail ? "We've emailed a 6-digit code to your work address. It expires in 10 minutes."
+                  : "Open your authenticator app and enter the 6-digit code for Bassign.")
+            </p>
+
+            @if (_error is not null)
+            {
+                <p class="ba-task__notice" role="alert">@_error</p>
+            }
+            @if (_notice is not null)
+            {
+                <p class="ba-flash" role="status">@_notice</p>
+            }
+
+            <form @onsubmit="VerifyAsync">
+                <label class="ba-label" for="code">@(_recovery ? "Recovery code" : "6-digit code")</label>
+                @if (_recovery)
+                {
+                    <input class="ba-input" id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" required @bind="_code" />
+                }
+                else
+                {
+                    <input class="ba-input ba-code-input" id="code" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required @bind="_code" />
+                }
+                <button class="ba-submit" type="submit" disabled="@_busy">@(_busy ? "Checking…" : "Continue")</button>
+            </form>
+
+            @if (pending.ByEmail && !_recovery)
+            {
+                <button type="button" class="ba-sheet__close" disabled="@_busy" @onclick="ResendAsync">Send another code</button>
+            }
+            <button type="button" class="ba-sheet__close" @onclick="ToggleRecovery">
+                @(_recovery ? (pending.ByEmail ? "Use an emailed code instead" : "Use my authenticator app instead")
+                            : (pending.ByEmail ? "Can't get to your email? Use a recovery code" : "Lost your authenticator? Use a recovery code"))
+            </button>
+            <button type="button" class="ba-sheet__close" @onclick="StartOver">Back to sign in</button>
         }
+        else
+        {
+            <h1>Sign in to @Branding.Name</h1>
+            <p class="ba-page-sub">Use the email your manager invited.</p>
+            @if (Connection.Current is { } server)
+            {
+                <p class="ba-sheet__meta">Server: @server.ApiBase.Host · <a href="/connect" class="ba-link">Not @Branding.Name?</a></p>
+            }
 
-        <form @onsubmit="SignInAsync">
-            <label class="ba-label" for="email">Email</label>
-            <input class="ba-input" id="email" type="email" autocomplete="username" inputmode="email" required @bind="_email" />
+            @if (_error is not null)
+            {
+                <p class="ba-task__notice" role="alert">@_error</p>
+            }
 
-            <label class="ba-label" for="password">Password</label>
-            <div class="ba-password">
-                <input class="ba-input" id="password" type="@(_showPassword ? "text" : "password")"
-                       autocomplete="current-password" required @bind="_password" />
-                <button type="button" class="ba-password__toggle" @onclick="() => _showPassword = !_showPassword"
-                        aria-label="@(_showPassword ? "Hide password" : "Show password")"
-                        aria-pressed="@(_showPassword ? "true" : "false")">@(_showPassword ? "Hide" : "Show")</button>
-            </div>
+            <form @onsubmit="SignInAsync">
+                <label class="ba-label" for="email">Email</label>
+                <input class="ba-input" id="email" type="email" autocomplete="username" inputmode="email" required @bind="_email" />
 
-            <button class="ba-submit" type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
-        </form>
+                <label class="ba-label" for="password">Password</label>
+                <div class="ba-password">
+                    <input class="ba-input" id="password" type="@(_showPassword ? "text" : "password")"
+                           autocomplete="current-password" required @bind="_password" />
+                    <button type="button" class="ba-password__toggle" @onclick="() => _showPassword = !_showPassword"
+                            aria-label="@(_showPassword ? "Hide password" : "Show password")"
+                            aria-pressed="@(_showPassword ? "true" : "false")">@(_showPassword ? "Hide" : "Show")</button>
+                </div>
+
+                <button class="ba-submit" type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+            </form>
+        }
     </div>
 </div>
 
@@ -43,8 +92,19 @@
     private string? _error;
     private bool _busy;
     private bool _showPassword;
+    private string _code = "";
+    private bool _recovery;
+    private string? _notice;
 
-    protected override void OnInitialized() => Branding.Changed += OnBrandingChanged;
+    protected override void OnInitialized()
+    {
+        if (Connection.Current is null)
+        {
+            Nav.NavigateTo("/connect", replace: true);
+            return;
+        }
+        Branding.Changed += OnBrandingChanged;
+    }
     private void OnBrandingChanged() => _ = InvokeAsync(StateHasChanged);
 
     private async Task SignInAsync()
@@ -54,12 +114,65 @@
         var result = await Session.SignInAsync(_email, _password);
         _busy = false;
 
+        if (Session.Pending is not null)   // password right: the screen now asks for the code
+        {
+            _password = "";
+            _code = "";
+            _recovery = false;
+            return;
+        }
         if (!result.Succeeded)
         {
             _error = result.Message;
             return;
         }
+        await FinishAsync();
+    }
 
+    private async Task VerifyAsync()
+    {
+        _busy = true;
+        _error = null;
+        _notice = null;
+        var result = await Session.CompleteTwoFactorAsync(_code, _recovery);
+        _busy = false;
+        if (!result.Succeeded)
+        {
+            _error = result.Message;
+            _code = "";
+            return;
+        }
+        await FinishAsync();
+    }
+
+    private async Task ResendAsync()
+    {
+        _busy = true;
+        _error = null;
+        var result = await Session.ResendCodeAsync();
+        _busy = false;
+        _notice = result.Succeeded ? "A new code is on its way. Only the newest code works." : null;
+        if (!result.Succeeded) _error = result.Message;
+    }
+
+    private void ToggleRecovery()
+    {
+        _recovery = !_recovery;
+        _code = "";
+        _error = null;
+        _notice = null;
+    }
+
+    private void StartOver()
+    {
+        Session.CancelTwoFactor();
+        _code = "";
+        _error = null;
+        _notice = null;
+    }
+
+    private async Task FinishAsync()
+    {
         // A different person on this phone: start from a clean local store.
         var email = _email.Trim();
         if (!string.Equals(Preferences.Default.Get(LastUserKey, ""), email, StringComparison.OrdinalIgnoreCase))

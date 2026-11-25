@@ -8,6 +8,7 @@
 @inject LocalDb LocalDb
 @inject BrandingService Branding
 @inject NavigationManager Nav
+@inject IServerConnection Connection
 
 <header class="ba-field__head">
     <div>
@@ -132,6 +133,7 @@ else
                 @(_pending == 1 ? "it" : "them") from this phone.
             </p>
         }
+        <button type="button" class="ba-link ba-sheet__switch" @onclick="@(() => Nav.NavigateTo("/connect"))">Switch organisation</button>
         <button type="button" class="ba-sheet__signout" @onclick="SignOutAsync">
             @(_confirmSignOut ? "Sign out anyway" : "Sign out")
         </button>
@@ -170,6 +172,11 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        if (Connection.Current is null)
+        {
+            Nav.NavigateTo("/connect", replace: true);
+            return;
+        }
         _user = await Session.GetUserAsync();
         if (_user is null)
         {

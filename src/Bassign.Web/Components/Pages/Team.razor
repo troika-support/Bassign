@@ -13,8 +13,14 @@
 
 <PageTitle>Team · Bassign</PageTitle>
 
-<h1 class="ba-page-title">Team</h1>
-<p class="ba-page-sub">@Summary</p>
+<div class="d-flex align-center justify-space-between flex-wrap gap-2">
+    <div>
+        <h1 class="ba-page-title">Team</h1>
+        <p class="ba-page-sub">@Summary</p>
+    </div>
+    <MudButton Href="/connect" Target="_blank" Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.QrCode2"
+               title="Show or print the QR code staff scan to get the phone app">Phone app QR code</MudButton>
+</div>
 
 @if (_vm is null)
 {
@@ -35,18 +41,34 @@ else
                             <div class="ba-workload__meta" style="overflow:hidden; text-overflow:ellipsis;">@(IsErased(m) ? "—" : m.Email)</div>
                         </div>
                         <span class="ba-pill">@m.Role</span>
+                        @if (m.TwoFactor)
+                        {
+                            <span class="ba-pill" title="Uses two-factor sign-in"><MudIcon Icon="@Icons.Material.Outlined.Security" Size="Size.Small" Style="vertical-align:-3px" /> 2FA</span>
+                        }
                         <span class="ba-pill @(m.IsActive ? "ba-pill--ok" : "ba-pill--off")">@(IsErased(m) ? "Erased" : m.IsActive ? "Active" : "Inactive")</span>
                         @if (_isAdmin && !IsErased(m))
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ToggleActive(m))">
                                 @(m.IsActive ? "Deactivate" : "Reactivate")
                             </MudButton>
+                            @if (m.TwoFactor)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => _confirmReset = m.Id)">Reset 2FA…</MudButton>
+                            }
                             @if (!m.IsActive)
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => _confirmErase = m.Id)">Erase data…</MudButton>
                             }
                         }
                     </div>
+                    @if (_confirmReset == m.Id)
+                    {
+                        <div class="ba-inline-confirm mb-3" role="alert">
+                            <span>Reset <strong>@m.Name</strong>'s two-factor sign-in? Their authenticator app, emailed codes, recovery codes and passkeys stop working. Only do this after checking it's really them (for example, by phone). If their role requires it, they set it up again at their next sign-in.</span>
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="@(() => ResetTwoFactor(m))">Reset</MudButton>
+                            <MudButton Variant="Variant.Text" OnClick="@(() => _confirmReset = null)">Cancel</MudButton>
+                        </div>
+                    }
                     @if (_confirmErase == m.Id)
                     {
                         <div class="ba-inline-confirm mb-3" role="alert">
@@ -187,6 +209,16 @@ else
         _busyErase = false;
         _confirmErase = null;
         Snackbar.Add(r.IsSuccess ? "Personal data erased." : r.Error.Message, r.IsSuccess ? Severity.Success : Severity.Warning);
+        await Load();
+    }
+
+    private string? _confirmReset;
+
+    private async Task ResetTwoFactor(TeamMember member)
+    {
+        var r = await Sender.TrySend(new Bassign.Application.Identity.ResetTwoFactorCommand(member.Id));
+        _confirmReset = null;
+        Snackbar.Add(r.IsSuccess ? $"{member.Name}'s two-factor sign-in was reset." : r.Error.Message, r.IsSuccess ? Severity.Success : Severity.Warning);
         await Load();
     }
 

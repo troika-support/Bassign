@@ -95,6 +95,7 @@ public sealed class BassignApiFactory : WebApplicationFactory<Program>, IAsyncLi
         Set("Media__ProofRoot", Path.Combine(_temp, "proof"));
         Set("DataProtection__KeysPath", Path.Combine(_temp, "keys"));
         Set("Ai__Provider", "none");
+        Set("Dev__WaiveTwoFactor", "false");   // the real two-factor rules, whatever the developer's appsettings say
 
         _ = Server;   // start the host now: migrate + seed
 

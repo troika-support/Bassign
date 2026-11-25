@@ -56,7 +56,7 @@ public sealed class IdentityAdmin(
     public async Task<IReadOnlyList<TeamMember>> ListMembersAsync(CancellationToken cancellationToken = default)
     {
         var people = await db.Users.AsNoTracking()
-            .Select(u => new { u.Id, u.DisplayName, u.Email, u.IsActive })
+            .Select(u => new { u.Id, u.DisplayName, u.Email, u.IsActive, u.TwoFactorEnabled })
             .ToListAsync(cancellationToken);
 
         var userRoles = await (
@@ -72,7 +72,7 @@ public sealed class IdentityAdmin(
 
         return people
             .Select(p => new TeamMember(p.Id, p.DisplayName, p.Email ?? string.Empty,
-                roleByUser.GetValueOrDefault(p.Id, "—"), p.IsActive))
+                roleByUser.GetValueOrDefault(p.Id, "—"), p.IsActive, p.TwoFactorEnabled))
             .OrderBy(m => RoleRank(m.Role)).ThenBy(m => m.Name)
             .ToList();
     }

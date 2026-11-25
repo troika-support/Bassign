@@ -23,6 +23,16 @@ public sealed partial class BrandingService(HttpBrandingApi api)
     public string Css =>
         $":root{{--ba-accent:{Accent};--ba-accent-600:{Mix(Accent, 0, 0.15)};--ba-accent-tint:{Mix(Accent, 255, 0.90)};}}";
 
+    /// <summary>A different organization was connected: show its name with the default accent until branding loads.</summary>
+    public void ResetTo(string organizationName)
+    {
+        Name = organizationName;
+        Accent = DefaultAccent;
+        Preferences.Default.Set(NameKey, Name);
+        Preferences.Default.Set(AccentKey, Accent);
+        Changed?.Invoke();
+    }
+
     public async Task RefreshAsync()
     {
         try

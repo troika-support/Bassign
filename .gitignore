@@ -37,3 +37,6 @@ coverage*/
 
 ## Rider / VS Code (optional)
 .idea/
+
+# Release packages (deploy/Build-Release.ps1)
+artifacts/

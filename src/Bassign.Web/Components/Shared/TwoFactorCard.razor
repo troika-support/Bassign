@@ -1,0 +1,105 @@
+@using Bassign.Application.Identity
+@using System.Security.Claims
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<section class="ba-card pa-5 ba-fill" aria-labelledby="tf-h">
+    <h2 class="ba-section-label" id="tf-h">Two-factor sign-in</h2>
+    @if (_status is null)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" aria-label="Loading" />
+    }
+    else if (!_status.Enabled)
+    {
+        <p class="ba-muted ba-lead">
+            Off. Add a code from an authenticator app@(_status.EmailCodesAvailable ? " or your email" : "") to your sign-in, so a stolen password alone isn't enough.
+            @if (_status.Required) { <b> Required for your role.</b> }
+        </p>
+        <MudButton Href="/two-factor/setup" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Security">Set up</MudButton>
+    }
+    else
+    {
+        <p class="ba-lead" style="margin-bottom:8px;"><span class="ba-pill ba-pill--ok">On</span> @(ByEmail ? "Codes by email" : "Authenticator app")</p>
+        <p class="ba-muted" style="margin:0 0 12px;">
+            @_status.RecoveryCodesLeft recovery code@(_status.RecoveryCodesLeft == 1 ? "" : "s") left.
+            @if (_status.RecoveryCodesLeft <= 3) { <b> Make new ones soon.</b> }
+        </p>
+
+        @if (_newCodes is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">Your old recovery codes no longer work. Save these now — they won't be shown again.</MudAlert>
+            <ul class="ba-recovery-codes" aria-label="New recovery codes">
+                @foreach (var c in _newCodes) { <li>@c</li> }
+            </ul>
+            <div class="d-flex gap-2 mb-3">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="CopyAsync">Copy</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _newCodes = null">I've saved them</MudButton>
+            </div>
+        }
+
+        <div class="d-flex gap-2 flex-wrap">
+            @if (ByEmail)
+            {
+                <MudButton Href="/two-factor/setup" Variant="Variant.Outlined" Color="Color.Primary" title="Safer, and works without data">Switch to an authenticator app</MudButton>
+            }
+            <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="NewCodesAsync">New recovery codes</MudButton>
+            @if (!_status.Required)
+            {
+                @if (_confirmOff)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="_busy" OnClick="TurnOffAsync">Yes, turn off</MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="() => _confirmOff = false">Cancel</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="_busy" OnClick="() => _confirmOff = true">Turn off</MudButton>
+                }
+            }
+        </div>
+        @if (_status.Required)
+        {
+            <p class="ba-muted" style="margin:12px 0 0; font-size:.85rem;">Required for your role. @(ByEmail ? "" : "New phone? Ask an Admin to reset it, then set it up again.")</p>
+        }
+    }
+</section>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private TwoFactorStatus? _status;
+    private IReadOnlyList<string>? _newCodes;
+    private bool _busy, _confirmOff;
+    private string _userId = "";
+    private bool ByEmail => _status?.Method == TwoFactorMethods.Email;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = (await AuthState!).User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _status = await Sender.Send(new GetTwoFactorStatusQuery(_userId));
+
+    private async Task NewCodesAsync()
+    {
+        _busy = true;
+        var r = await Sender.TrySend(new NewRecoveryCodesCommand());
+        _busy = false;
+        if (!r.IsSuccess) { Snackbar.Add(r.Error.Message, Severity.Error); return; }
+        _newCodes = r.Value;
+        await LoadAsync();
+    }
+
+    private async Task TurnOffAsync()
+    {
+        _busy = true;
+        var r = await Sender.TrySend(new TurnOffTwoFactorCommand());
+        _busy = false;
+        _confirmOff = false;
+        Snackbar.Add(r.IsSuccess ? "Two-factor sign-in is off." : r.Error.Message, r.IsSuccess ? Severity.Success : Severity.Error);
+        await LoadAsync();
+    }
+
+    private async Task CopyAsync() =>
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", string.Join(Environment.NewLine, _newCodes ?? []));
+}

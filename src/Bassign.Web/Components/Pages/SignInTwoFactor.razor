@@ -1,0 +1,82 @@
+@page "/sign-in/two-factor"
+@layout Bassign.Web.Components.Layout.AuthLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>Enter your code · Bassign</PageTitle>
+
+<div class="ba-auth">
+    <div class="ba-card ba-auth__card">
+        <div class="ba-auth__brand">
+            <span class="ba-orgmark ba-orgmark--lg" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Outlined.Security" />
+            </span>
+            <h1 class="ba-auth__title">@(Recovery ? "Use a recovery code" : "Enter your code")</h1>
+            <p class="ba-auth__sub">
+                @(Recovery ? "Type one of the recovery codes you saved when you set up two-factor sign-in. Each works once."
+                  : ByEmail ? "We've emailed a 6-digit code to your work address. It expires in 10 minutes."
+                  : "Open your authenticator app and enter the 6-digit code for Bassign.")
+            </p>
+        </div>
+
+        @if (Error is not null)
+        {
+            <p class="ba-auth__error" role="alert">@Error</p>
+        }
+        else if (Sent == 1)
+        {
+            <p class="ba-auth__notice" role="status">A new code is on its way. Only the newest code works.</p>
+        }
+
+        <form method="post" action="/account/two-factor" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <input type="hidden" name="recovery" value="@(Recovery ? "true" : "false")" />
+
+            @if (Recovery)
+            {
+                <label class="ba-label" for="code">Recovery code</label>
+                <input class="ba-input" id="code" name="code" required autocomplete="off" autocapitalize="characters" spellcheck="false" autofocus />
+            }
+            else
+            {
+                <label class="ba-label" for="code">6-digit code</label>
+                <input class="ba-input ba-code-input" id="code" name="code" required inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7"
+                       autocomplete="one-time-code" autofocus />
+            }
+            <button class="ba-submit" type="submit">Continue</button>
+        </form>
+
+        @if (ByEmail && !Recovery)
+        {
+            <form method="post" action="/account/two-factor/resend" data-enhance="false" style="margin-top:12px; text-align:center;">
+                <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                <button type="submit" class="ba-linkbutton">Send another code</button>
+            </form>
+        }
+
+        <p class="ba-muted" style="margin:16px 0 0; text-align:center; font-size:.88rem;">
+            @if (Recovery)
+            {
+                <a class="ba-link" href="@($"/sign-in/two-factor?returnUrl={Uri.EscapeDataString(ReturnUrl ?? "/")}{MethodQuery}")">@(ByEmail ? "Use an emailed code instead" : "Use my authenticator app instead")</a>
+            }
+            else
+            {
+                <span>@(ByEmail ? "Can't get to your email?" : "Lost your phone?") <a class="ba-link" href="@($"/sign-in/two-factor?recovery=1&returnUrl={Uri.EscapeDataString(ReturnUrl ?? "/")}{MethodQuery}")">Use a recovery code</a></span>
+            }
+        </p>
+        <p class="ba-muted" style="margin:8px 0 0; text-align:center; font-size:.82rem;">No codes either? Ask an Admin to reset your two-factor sign-in.</p>
+    </div>
+    <p class="ba-auth__powered">Powered by <span>Bassign</span></p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "recovery")] private int? RecoveryFlag { get; set; }
+    [SupplyParameterFromQuery] private string? Method { get; set; }
+    [SupplyParameterFromQuery] private int? Sent { get; set; }
+    private bool Recovery => RecoveryFlag == 1;
+    private bool ByEmail => Method == "email";   // wording only: the server decides how the code is checked
+    private string MethodQuery => ByEmail ? "&method=email" : "";
+}

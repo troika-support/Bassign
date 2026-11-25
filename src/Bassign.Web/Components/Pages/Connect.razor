@@ -1,0 +1,68 @@
+@page "/connect"
+@layout Bassign.Web.Components.Layout.AuthLayout
+@attribute [AllowAnonymous]
+@using Bassign.Application.Organizations.GetOrganization
+@using Microsoft.Extensions.Options
+@using Bassign.Infrastructure.Options
+@inject IUiSender Sender
+@inject NavigationManager Nav
+@inject IOptionsMonitor<PublicOptions> PublicUrls
+
+<PageTitle>Get the phone app · Bassign</PageTitle>
+
+<div class="ba-auth" style="max-width:440px;">
+    <div class="ba-card ba-auth__card">
+        <div class="ba-auth__brand">
+            <span class="ba-orgmark ba-orgmark--lg" aria-hidden="true">@Initial</span>
+            <h1 class="ba-auth__title">@(Welcome ? $"Welcome to {_org}" : $"Bassign for {_org}")</h1>
+            <p class="ba-auth__sub">See your tasks, accept them and mark them done from your phone — even without data, it syncs later.</p>
+        </div>
+
+        @if (Welcome)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">Your account is ready. Get the phone app now, or carry on in the browser.</MudAlert>
+        }
+
+        <h2 class="ba-section-label">On your Android phone</h2>
+        <MudButton Href="@PhoneConnect.AndroidIntent(Nav.BaseUri, PublicUrls.CurrentValue.AppStoreUrl)" Variant="Variant.Filled" Color="Color.Primary"
+                   FullWidth="true" Size="Size.Large" StartIcon="@Icons.Material.Outlined.PhoneAndroid">Open in the Bassign app</MudButton>
+        <p class="ba-muted ba-connect__small">Don't have it? The button takes you to the Play Store. After installing, come back and tap it again.</p>
+
+        <h2 class="ba-section-label mt-5">On a computer?</h2>
+        <div class="ba-connect__qr">
+            <div class="ba-connect__code" role="img" aria-label="QR code that opens @_pageUrl">@PhoneConnect.QrSvg(_pageUrl)</div>
+            <p class="ba-muted ba-connect__small">Point your phone's camera at this code, then tap the link it shows.</p>
+        </div>
+
+        <details class="ba-connect__manual mt-4">
+            <summary>Connect by typing the address instead</summary>
+            <p>Open the Bassign app, tap <b>Connect</b>, and enter:</p>
+            <p class="ba-connect__host"><code>@_host</code></p>
+            <p class="ba-muted ba-connect__small">The app will show <b>@_org</b> and ask you to confirm before you sign in. If it shows a different name, stop and ask your manager.</p>
+        </details>
+
+        @if (Welcome)
+        {
+            <MudButton Href="/" Variant="Variant.Text" FullWidth="true" Class="mt-4">Continue in the browser</MudButton>
+        }
+    </div>
+    <p class="ba-auth__powered">Powered by <span>Bassign</span></p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "welcome")] public int? WelcomeFlag { get; set; }
+
+    private string _org = "your organisation";
+    private string _host = "";
+    private string _pageUrl = "";
+
+    private bool Welcome => WelcomeFlag == 1;
+    private string Initial => _org.Trim() is { Length: > 0 } n ? n[..1].ToUpperInvariant() : "B";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _org = (await Sender.Send(new GetOrganizationQuery())).Name;
+        _host = new Uri(Nav.BaseUri).Authority;
+        _pageUrl = PhoneConnect.PageUrl(Nav.BaseUri);
+    }
+}

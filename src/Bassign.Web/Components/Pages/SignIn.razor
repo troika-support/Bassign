@@ -2,7 +2,9 @@
 @layout Bassign.Web.Components.Layout.AuthLayout
 @attribute [AllowAnonymous]
 @using Bassign.Application.Organizations.GetOrganization
+@using Bassign.Application.FirstRun
 @inject IUiSender Sender
+@inject NavigationManager Nav
 
 <PageTitle>Sign in · @_orgName</PageTitle>
 
@@ -16,7 +18,15 @@
 
         @if (Error is not null)
         {
-            <p class="ba-auth__error" role="alert">That email or password doesn't match.</p>
+            <p class="ba-auth__error" role="alert">That email or password doesn't match. After 5 wrong tries, sign-in pauses for 5 minutes.</p>
+        }
+        else if (Passkey == "failed")
+        {
+            <p class="ba-auth__error" role="alert">That passkey didn't work here. Try again, or sign in with your password.</p>
+        }
+        else if (Expired == 1)
+        {
+            <p class="ba-auth__error" role="alert">That took a little too long — please sign in again.</p>
         }
 
         <form method="post" action="/account/login" data-enhance="false">
@@ -39,6 +49,15 @@
 
             <button class="ba-submit" type="submit">Sign in</button>
         </form>
+
+        <div class="ba-or" role="separator" aria-label="or"><span>or</span></div>
+        <form method="post" action="/account/passkey/sign-in" data-enhance="false" data-passkey-form="signin">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <input type="hidden" name="credentialJson" />
+            <button class="ba-submit ba-submit--secondary" type="button" data-passkey-start>Sign in with a passkey</button>
+            <p class="ba-auth__error" role="alert" data-passkey-error hidden style="margin-top:12px;"></p>
+        </form>
         <p class="ba-muted" style="margin:16px 0 0; text-align:center; font-size:.8rem;"><a class="ba-link" href="/privacy">Privacy notice</a></p>
     </div>
 
@@ -48,6 +67,8 @@
 @code {
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] private int? Expired { get; set; }
+    [SupplyParameterFromQuery] private string? Passkey { get; set; }
 
     private string _orgName = "Bassign";
     private string _initial = "B";
@@ -55,6 +76,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // A fresh install has nobody to sign in as: go to first-Admin setup instead.
+        if (!(await Sender.Send(new GetFirstRunStateQuery())).AdminExists)
+        {
+            Nav.NavigateTo("/first-admin", replace: true);
+            return;
+        }
         var org = await Sender.Send(new GetOrganizationQuery());
         _orgName = org.Name;
         _initial = org.Name.Trim() is { Length: > 0 } n ? n[..1].ToUpperInvariant() : "B";

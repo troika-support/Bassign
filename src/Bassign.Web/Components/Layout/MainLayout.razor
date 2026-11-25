@@ -75,6 +75,19 @@
         _brandCss = $":root{{--ba-accent:{accent};--ba-accent-600:{BrandColors.Shade(accent, 0.15)};--ba-accent-tint:{BrandColors.Tint(org.AccentHex, 0.90)};}}";
     }
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // Decision #24: until someone required to use two-factor has set it up, only the setup page is reachable
+    // (in-app navigation; TwoFactorSetupGate covers full page loads).
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthState is null) return;
+        var user = (await AuthState).User;
+        if (Bassign.Web.Security.TwoFactorSignIn.MustSetUp(user)
+            && !new Uri(Nav.Uri).AbsolutePath.StartsWith(Bassign.Web.Security.TwoFactorSignIn.SetupPath, StringComparison.OrdinalIgnoreCase))
+            Nav.NavigateTo(Bassign.Web.Security.TwoFactorSignIn.SetupPath, replace: true);
+    }
+
     private async Task NewTask()
     {
         var dialog = await Dialogs.ShowAsync<NewTaskDialog>("New task");

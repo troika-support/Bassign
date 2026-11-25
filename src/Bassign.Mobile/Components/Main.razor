@@ -1,5 +1,6 @@
 @implements IDisposable
 @inject BrandingService Branding
+@inject NavigationManager Nav
 
 @* The organization's accent, applied to every screen (overrides the default token). *@
 <style>@Branding.Css</style>
@@ -32,8 +33,30 @@
 @code {
     private ErrorBoundary? _boundary;
 
-    protected override void OnInitialized() => Branding.Changed += OnBrandingChanged;
+    protected override void OnInitialized()
+    {
+        Branding.Changed += OnBrandingChanged;
+        DeepLinks.Arrived += OnDeepLink;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) OnDeepLink();   // the app was opened by a connect link
+    }
+
+    // A bassign://connect link: go to the Connect screen, which looks the server up and asks before switching.
+    private void OnDeepLink() => _ = InvokeAsync(() =>
+    {
+        if (DeepLinks.Take() is { } server)
+            Nav.NavigateTo($"/connect?server={Uri.EscapeDataString(server)}");
+    });
+
     private void OnBrandingChanged() => _ = InvokeAsync(StateHasChanged);
     private void Recover() => _boundary?.Recover();
-    public void Dispose() => Branding.Changed -= OnBrandingChanged;
+
+    public void Dispose()
+    {
+        Branding.Changed -= OnBrandingChanged;
+        DeepLinks.Arrived -= OnDeepLink;
+    }
 }

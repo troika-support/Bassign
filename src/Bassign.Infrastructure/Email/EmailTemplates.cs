@@ -71,5 +71,25 @@ public static class EmailTemplates
         return (subject, html, text);
     }
 
+    /// <summary>Two-factor sign-in code. The code leads the subject so it shows in the notification without opening the mail.</summary>
+    public static (string Subject, string Html, string Text) SignInCode(string orgName, string code, int minutes)
+    {
+        var spaced = code.Length == 6 ? $"{code[..3]} {code[3..]}" : code;
+        var subject = $"{spaced} is your {orgName} sign-in code";
+        var html = $"""
+            <!doctype html><html lang="en"><head><meta charset="utf-8"><title>{E(subject)}</title></head>
+            <body style="margin:0;padding:24px;background:#F6F7F9;font-family:Segoe UI,Arial,sans-serif;color:#16191D;">
+              <div style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:12px;padding:28px;">
+                <h1 style="margin:0 0 16px;font-size:20px;">Your sign-in code</h1>
+                <p style="margin:0 0 10px;">Enter this code to finish signing in to {E(orgName)} on Bassign:</p>
+                <p style="margin:16px 0;font-size:32px;font-weight:700;letter-spacing:6px;">{E(spaced)}</p>
+                <p style="margin:0;font-size:13px;color:#5C6470;">It works once and expires in {minutes} minutes. Nobody from {E(orgName)} or Bassign will ever ask you for it. If you didn't try to sign in, change your password.</p>
+              </div>
+            </body></html>
+            """;
+        var text = $"Your {orgName} sign-in code: {spaced}\n\nIt works once and expires in {minutes} minutes. Never share it. If you didn't try to sign in, change your password.";
+        return (subject, html, text);
+    }
+
     private static string E(string value) => WebUtility.HtmlEncode(value);
 }

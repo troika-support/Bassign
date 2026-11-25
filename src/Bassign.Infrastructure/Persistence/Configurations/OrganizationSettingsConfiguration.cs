@@ -47,5 +47,7 @@ public sealed class OrganizationSettingsConfiguration : IEntityTypeConfiguration
         builder.Property(o => o.PrivacyContactPhone).HasMaxLength(30);
         builder.Ignore(o => o.InviteLifetimeDays);
         builder.Ignore(o => o.InviteDomains);
+        builder.Property(o => o.TwoFactorRequiredForSetting).HasColumnName("TwoFactorRequiredFor").HasMaxLength(20);
+        builder.Ignore(o => o.TwoFactorRequiredFor);
     }
 }

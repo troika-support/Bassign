@@ -4,6 +4,7 @@ using Bassign.Domain.Tasks;
 using Bassign.Domain.Teams;
 using Bassign.Infrastructure.Identity;
 using Bassign.Infrastructure.Persistence.Messaging;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 

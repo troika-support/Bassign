@@ -72,6 +72,7 @@ public sealed class PersonalDataEraser(
         // 2) Things addressed to them.
         var notifications = await db.OutboundNotifications.Where(n => n.UserId == userId).ExecuteDeleteAsync(cancellationToken);
         var tokens = await db.RefreshTokens.Where(t => t.UserId == userId).ExecuteDeleteAsync(cancellationToken);
+        await db.UserPasskeys.Where(p => p.UserId == userId).ExecuteDeleteAsync(cancellationToken);   // sign-in credentials go too
         var invites = originalEmail is null ? 0
             : await db.Invitations.Where(i => i.Email == originalEmail).ExecuteDeleteAsync(cancellationToken);
 

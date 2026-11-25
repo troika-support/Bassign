@@ -1,0 +1,77 @@
+@using Bassign.Application.Identity
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+
+<section class="ba-card pa-5 ba-fill" aria-labelledby="pk-h">
+    <h2 class="ba-section-label" id="pk-h">Passkeys</h2>
+    <p class="ba-muted ba-lead">Sign in on the website with your fingerprint, face or device PIN instead of your password and code. A passkey only works on the real Bassign site, so it can't be tricked out of you.</p>
+
+    @if (_passkeys is null)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" aria-label="Loading" />
+    }
+    else
+    {
+        @if (_passkeys.Count == 0)
+        {
+            <p class="ba-muted" style="margin:0;">No passkeys yet.</p>
+        }
+        else
+        {
+            <ul class="ba-daylist">
+                @foreach (var p in _passkeys)
+                {
+                    var passkey = p;
+                    <li>
+                        <span class="ba-daylist__name">@passkey.Name <span class="ba-muted"> · added @passkey.CreatedAt.ToLocalTime().ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</span></span>
+                        @if (_confirm == passkey.Id)
+                        {
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" Disabled="_busy" OnClick="() => RemoveAsync(passkey)">Remove</MudButton>
+                            <MudButton Size="Size.Small" OnClick="() => _confirm = null">Cancel</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Disabled="_busy" OnClick="() => _confirm = passkey.Id" aria-label="@($"Remove passkey {passkey.Name}")">Remove</MudButton>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_passkeys.Count < IPasskeys.MaxPerUser)
+        {
+            <form method="post" action="/account/passkey/register" data-enhance="false" data-passkey-form="register" class="ba-passkey-add">
+                <AntiforgeryToken />
+                <input type="hidden" name="credentialJson" />
+                <div>
+                    <label class="ba-label" for="pk-name">Name this device</label>
+                    <input class="ba-input" id="pk-name" name="name" maxlength="40" placeholder="e.g. Office laptop" autocomplete="off" />
+                </div>
+                <button class="ba-submit" type="button" data-passkey-start>Add a passkey</button>
+                <p class="ba-auth__error" role="alert" data-passkey-error hidden style="flex-basis:100%; margin:8px 0 0;"></p>
+            </form>
+        }
+        <p class="ba-muted" style="margin:12px 0 0; font-size:.85rem;">Add one on each device you use. Keep your password and two-factor sign-in too — they're your way in if a device is lost. Passkeys work on the website; the phone app uses codes.</p>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<PasskeyInfo>? _passkeys;
+    private string? _confirm;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _passkeys = await Sender.Send(new GetMyPasskeysQuery());
+
+    private async Task RemoveAsync(PasskeyInfo passkey)
+    {
+        _busy = true;
+        var r = await Sender.TrySend(new RemoveMyPasskeyCommand(passkey.Id));
+        _busy = false;
+        _confirm = null;
+        Snackbar.Add(r.IsSuccess ? $"{passkey.Name} removed. Also delete it from that device's password manager." : r.Error.Message,
+            r.IsSuccess ? Severity.Success : Severity.Error);
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,18 @@
+@inject NavigationManager Nav
+
+@* Profile: get the phone app onto this person's phone (decision #16). *@
+<section class="ba-card pa-5 ba-fill" aria-labelledby="phone-h">
+    <h2 class="ba-section-label" id="phone-h">Phone app</h2>
+    <div class="ba-phoneapp">
+        <div class="ba-connect__code ba-phoneapp__code" role="img" aria-label="QR code that opens @_pageUrl">@PhoneConnect.QrSvg(_pageUrl)</div>
+        <div>
+            <p class="ba-muted ba-lead">Scan with your phone's camera to install the app and connect it to your organisation. Works offline — changes sync when you're back on signal.</p>
+            <MudButton Href="/connect" Target="_blank" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Outlined.OpenInNew">Open the connect page</MudButton>
+        </div>
+    </div>
+</section>
+
+@code {
+    private string _pageUrl = "";
+    protected override void OnInitialized() => _pageUrl = PhoneConnect.PageUrl(Nav.BaseUri);
+}

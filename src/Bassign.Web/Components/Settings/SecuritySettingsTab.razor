@@ -1,5 +1,6 @@
 @using Bassign.Application.Organizations.Security
 @using Bassign.Application.Settings
+@using Bassign.Domain.Organizations
 @inject IUiSender Sender
 @inject ISnackbar Snackbar
 
@@ -28,6 +29,14 @@ else
                 <AdminSettingField State="@(S("Auth:RefreshTokenDays"))" Label="Phone app: stay signed in for this many days unused (1 – 90)"
                                    HelpText="Recommended: 30. Shorter is safer if phones are shared or lost." OnChange="Track" />
                 <p class="ba-muted" style="margin:8px 0 0;">Deactivating someone on the Team page signs them out everywhere within minutes, whatever these are set to.</p>
+
+                <h3 class="ba-section-label mt-5">Two-factor sign-in</h3>
+                <MudSelect T="string" @bind-Value="_form.TwoFactorRequiredFor" Label="Require a second sign-in step for" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="string" Value="@TwoFactorScopes.Admins">Admins</MudSelectItem>
+                    <MudSelectItem T="string" Value="@TwoFactorScopes.Managers">Admins and Managers</MudSelectItem>
+                    <MudSelectItem T="string" Value="@TwoFactorScopes.Everyone">Everyone</MudSelectItem>
+                </MudSelect>
+                <p class="ba-muted" style="margin:8px 0 0;">Admins always need it, with an authenticator app. Managers and Staff may use an app or emailed codes (email must be set up on the Email tab). Anyone newly included sets it up at their next sign-in; others can turn it on in their Profile. Setting it up is done on the website; the phone app then asks for the code when signing in.</p>
             </section>
         </MudItem>
 
@@ -66,6 +75,7 @@ else
         public string? ContactName { get; set; }
         public string? ContactEmail { get; set; }
         public string? ContactPhone { get; set; }
+        public string TwoFactorRequiredFor { get; set; } = TwoFactorScopes.Admins;
     }
 
     private static readonly int[] InviteDays = [1, 3, 7, 14, 30];
@@ -87,7 +97,8 @@ else
         _form = new Form
         {
             InviteLifetimeDays = vm.InviteLifetimeDays, Domains = string.Join(", ", vm.AllowedInviteDomains),
-            ContactName = vm.PrivacyContactName, ContactEmail = vm.PrivacyContactEmail, ContactPhone = vm.PrivacyContactPhone
+            ContactName = vm.PrivacyContactName, ContactEmail = vm.PrivacyContactEmail, ContactPhone = vm.PrivacyContactPhone,
+            TwoFactorRequiredFor = vm.TwoFactorRequiredFor
         };
         _states = [.. await Sender.Send(new GetAdminSettingsQuery("Auth")), .. await Sender.Send(new GetAdminSettingsQuery("Retention"))];
     }
@@ -98,7 +109,7 @@ else
         _busy = true;
         var org = await Sender.TrySend(new SaveSecuritySettingsCommand(new SecuritySettingsVm(
             _form.InviteLifetimeDays, (_form.Domains ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            _form.ContactName, _form.ContactEmail, _form.ContactPhone)));
+            _form.ContactName, _form.ContactEmail, _form.ContactPhone, _form.TwoFactorRequiredFor)));
         var admin = org.IsSuccess && _pending.Count > 0
             ? await Sender.TrySend(new SaveAdminSettingsCommand(new Dictionary<string, SettingChange>(_pending)))
             : org;

@@ -56,9 +56,21 @@ public static class DependencyInjection
             {
                 options.User.RequireUniqueEmail = true;
                 options.Password.RequiredLength = 8;
+                options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;   // adds the passkeys table
             })
             .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<AppDbContext>();
+            .AddEntityFrameworkStores<AppDbContext>()
+            .AddSignInManager()   // used only for passkey ceremonies (WebAuthn); sessions are our own cookie
+            .AddTokenProvider<AuthenticatorTokenProvider<ApplicationUser>>(TokenOptions.DefaultAuthenticatorProvider);
+        services.Configure<IdentityPasskeyOptions>(options =>
+        {
+            options.UserVerificationRequirement = "required";   // fingerprint/face/PIN every time: that is the second factor
+            options.ResidentKeyRequirement = "required";        // discoverable: sign in without typing an email
+        });
+        services.AddScoped<Bassign.Application.Identity.IPasskeys, PasskeyService>();
+        // Same store, but two-factor secrets encrypted and recovery codes hashed (registered last, so it wins).
+        services.AddScoped<IUserStore<ApplicationUser>, ProtectedUserStore>();
+        services.AddScoped<Bassign.Application.Identity.ITwoFactor, TwoFactorService>();
 
         services.AddHttpContextAccessor();
 
@@ -102,6 +114,7 @@ public static class DependencyInjection
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+        services.AddSingleton<Bassign.Application.FirstRun.ISetupCode, Bassign.Infrastructure.FirstRun.ConfigSetupCode>();
         services.AddScoped<Bassign.Application.Tasks.Settings.ITaskCategoryRepository, TaskCategoryRepository>();
         services.AddScoped<IIdentityAdmin, IdentityAdmin>();
         services.AddScoped<IInviteNotifier, EmailInviteNotifier>();

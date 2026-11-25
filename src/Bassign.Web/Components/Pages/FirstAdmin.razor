@@ -1,0 +1,67 @@
+@page "/first-admin"
+@layout Bassign.Web.Components.Layout.AuthLayout
+@attribute [AllowAnonymous]
+@using Bassign.Application.FirstRun
+@inject IUiSender Sender
+@inject NavigationManager Nav
+
+<PageTitle>Set up Bassign</PageTitle>
+
+<div class="ba-auth">
+    <div class="ba-card ba-auth__card">
+        <div class="ba-auth__brand">
+            <span class="ba-orgmark ba-orgmark--lg" aria-hidden="true">B</span>
+            <h1 class="ba-auth__title">Set up Bassign</h1>
+            <p class="ba-auth__sub">Create the first Admin account. Everyone else joins by invite.</p>
+        </div>
+
+        @if (_state is null)
+        {
+            <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+        }
+        else if (_state.AdminExists)
+        {
+            <p>This Bassign is already set up.</p>
+            <a class="ba-submit" style="display:block; text-align:center; text-decoration:none;" href="/sign-in">Go to sign in</a>
+        }
+        else if (!_state.SetupCodeConfigured)
+        {
+            <p class="ba-auth__error" role="alert">The setup code hasn't been set on this server yet.</p>
+            <p class="ba-muted">Whoever installed Bassign sets <code>Setup__Code</code> in the server's environment (see the deployment runbook), then reloads this page.</p>
+        }
+        else
+        {
+            @if (Error is not null)
+            {
+                <p class="ba-auth__error" role="alert">@Error</p>
+            }
+            <form method="post" action="/account/first-admin" data-enhance="false">
+                <AntiforgeryToken />
+
+                <label class="ba-label" for="code">Setup code</label>
+                <input class="ba-input" id="code" name="setupCode" required autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" />
+                <p class="ba-muted" style="margin:-10px 0 16px; font-size:.82rem;">From whoever installed Bassign. It only works once.</p>
+
+                <label class="ba-label" for="name">Your name</label>
+                <input class="ba-input" id="name" name="displayName" required maxlength="100" autocomplete="name" />
+
+                <label class="ba-label" for="email">Work email</label>
+                <input class="ba-input" id="email" name="email" type="email" required autocomplete="username" inputmode="email" />
+
+                <label class="ba-label" for="password">Password</label>
+                <input class="ba-input" id="password" name="password" type="password" required minlength="10" autocomplete="new-password" />
+                <p class="ba-muted" style="margin:-10px 0 16px; font-size:.82rem;">At least 10 characters.</p>
+
+                <button class="ba-submit" type="submit">Create Admin account</button>
+            </form>
+        }
+    </div>
+    <p class="ba-auth__powered">Powered by <span>Bassign</span></p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    private FirstRunState? _state;
+
+    protected override async Task OnInitializedAsync() => _state = await Sender.Send(new GetFirstRunStateQuery());
+}

@@ -102,4 +102,10 @@ public sealed class PublicOptions
 
     /// <summary>The API's public https address, e.g. https://api.client.co.zw — used in webhook URLs and the phone connect code.</summary>
     public string ApiBaseUrl { get; set; } = string.Empty;
+
+    /// <summary>The shared phone app (decision #16).</summary>
+    public const string AndroidAppId = "com.troikadesign.bassign";
+
+    /// <summary>Where the connect page sends people who don't have the app yet.</summary>
+    public string AppStoreUrl { get; set; } = $"https://play.google.com/store/apps/details?id={AndroidAppId}";
 }

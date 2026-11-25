@@ -16,7 +16,8 @@ namespace Bassign.Application.Organizations.Security;
 /// periods are Admin settings — see AdminSettingKeys "Auth:" and "Retention:".)</summary>
 public sealed record SecuritySettingsVm(
     int InviteLifetimeDays, IReadOnlyList<string> AllowedInviteDomains,
-    string? PrivacyContactName, string? PrivacyContactEmail, string? PrivacyContactPhone);
+    string? PrivacyContactName, string? PrivacyContactEmail, string? PrivacyContactPhone,
+    string TwoFactorRequiredFor = TwoFactorScopes.Admins);
 
 public sealed record GetSecuritySettingsQuery : IRequest<SecuritySettingsVm>;
 
@@ -25,7 +26,8 @@ public sealed class GetSecuritySettingsHandler(IOrganizationRepository organizat
     public async ValueTask<SecuritySettingsVm> Handle(GetSecuritySettingsQuery request, CancellationToken cancellationToken)
     {
         var o = await organization.FindAsync(cancellationToken) ?? OrganizationSettings.CreateDefault();
-        return new SecuritySettingsVm(o.InviteLifetimeDays, o.InviteDomains, o.PrivacyContactName, o.PrivacyContactEmail, o.PrivacyContactPhone);
+        return new SecuritySettingsVm(o.InviteLifetimeDays, o.InviteDomains, o.PrivacyContactName, o.PrivacyContactEmail, o.PrivacyContactPhone,
+            o.TwoFactorRequiredFor);
     }
 }
 
@@ -60,6 +62,7 @@ public sealed class SaveSecuritySettingsHandler(IOrganizationRepository organiza
         try
         {
             org.ConfigureSecurity(s.InviteLifetimeDays, s.AllowedInviteDomains, s.PrivacyContactName, s.PrivacyContactEmail, s.PrivacyContactPhone);
+            org.ConfigureTwoFactor(s.TwoFactorRequiredFor);
         }
         catch (ArgumentException ex) { return new Error("org.invalid", ex.Message); }
 

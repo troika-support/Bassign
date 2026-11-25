@@ -1,0 +1,191 @@
+@page "/two-factor/setup"
+@attribute [Authorize]
+@using Bassign.Application.Identity
+@using System.Security.Claims
+@inject IUiSender Sender
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Two-factor sign-in · Bassign</PageTitle>
+
+<h1 class="ba-page-title">Two-factor sign-in</h1>
+<p class="ba-page-sub">A code from your phone as well as your password, so a stolen password alone can't get into your account.</p>
+
+@if (_mustSetUp)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        @(_upgrade ? "Admins must use an authenticator app instead of email codes. Set it up to continue — it takes about two minutes."
+                   : "Your organisation requires two-factor sign-in for your role. Set it up to continue — it takes about two minutes.")
+    </MudAlert>
+}
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="8">
+        <section class="ba-card pa-5" aria-live="polite">
+            @switch (_step)
+            {
+                case Step.Loading:
+                    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+                    break;
+
+                case Step.AlreadyOn:
+                    <h2 class="ba-section-label">Already on</h2>
+                    <p>Two-factor sign-in is on for your account. Manage it from your <a class="ba-link" href="/profile">Profile</a>.</p>
+                    break;
+
+                case Step.Intro:
+                    <h2 class="ba-section-label">1. Get an authenticator app</h2>
+                    <p class="ba-muted ba-lead">Install a free one on your phone if you don't have one: <b>Google Authenticator</b> or <b>Microsoft Authenticator</b> from the Play Store. It works without data.</p>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="StartAsync">I have the app — continue</MudButton>
+                    @if (_error is not null) { <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert> }
+
+                    @if (_emailAvailable && !_upgrade)
+                    {
+                        <h2 class="ba-section-label mt-6">Or get codes by email</h2>
+                        <p class="ba-muted ba-lead">No smartphone app? We'll email a code to <b>@_email</b> each time you sign in. It needs data to reach your inbox and is less secure than an app — anyone who can read your email could use it.</p>
+                        <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="StartEmailAsync" StartIcon="@Icons.Material.Outlined.Email">Email me a code</MudButton>
+                    }
+                    break;
+
+                case Step.EmailCode:
+                    <h2 class="ba-section-label">Enter the code we emailed</h2>
+                    <p class="ba-muted ba-lead">Sent to <b>@_email</b>. It expires in 10 minutes — check spam if it's not there in a minute.</p>
+                    <form @onsubmit="ConfirmEmailAsync" class="d-flex gap-2 align-start flex-wrap">
+                        <MudTextField T="string" @bind-Value="_code" Label="6-digit code" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      InputMode="InputMode.numeric" MaxLength="7" Immediate="true" Error="_error is not null" ErrorText="@_error" Style="max-width:220px" />
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1" Disabled="_busy">Turn on</MudButton>
+                    </form>
+                    <div class="d-flex gap-2 mt-3">
+                        <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="StartEmailAsync">Send another code</MudButton>
+                        <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="BackToIntro">Use an app instead</MudButton>
+                    </div>
+                    break;
+
+                case Step.Scan:
+                    <h2 class="ba-section-label">2. Add Bassign to the app</h2>
+                    <div class="ba-phoneapp">
+                        <div class="ba-connect__code ba-phoneapp__code" role="img" aria-label="QR code to add Bassign to your authenticator app">@PhoneConnect.QrSvg(_setup!.OtpauthUri, 5)</div>
+                        <div>
+                            <p class="ba-muted ba-lead">In the app tap <b>+</b>, then <b>Scan a QR code</b>. Can't scan? Choose <b>Enter a setup key</b> and type:</p>
+                            <p><span class="ba-otp-key">@_setup.SharedKey</span></p>
+                        </div>
+                    </div>
+
+                    <h2 class="ba-section-label mt-5">3. Enter the code it shows</h2>
+                    <form @onsubmit="ConfirmAsync" class="d-flex gap-2 align-start flex-wrap">
+                        <MudTextField T="string" @bind-Value="_code" Label="6-digit code" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      InputMode="InputMode.numeric" MaxLength="7" Immediate="true" Error="_error is not null" ErrorText="@_error" Style="max-width:220px" />
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1" Disabled="_busy">Turn on</MudButton>
+                    </form>
+                    break;
+
+                case Step.Codes:
+                    <h2 class="ba-section-label">Save your recovery codes</h2>
+                    <p class="ba-muted ba-lead">If you lose your phone, each of these lets you sign in <b>once</b>. Print them or write them down and keep them somewhere safe — not on the same phone. They won't be shown again.</p>
+                    <ul class="ba-recovery-codes" aria-label="Recovery codes">
+                        @foreach (var c in _codes) { <li>@c</li> }
+                    </ul>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="CopyAsync">Copy</MudButton>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Print" OnClick="PrintAsync">Print</MudButton>
+                    </div>
+                    <MudCheckBox T="bool" @bind-Value="_saved" Label="I've saved my recovery codes" Class="mt-4 ml-n3" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="!_saved" OnClick="Finish" Class="mt-2">Done</MudButton>
+                    break;
+            }
+        </section>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private enum Step { Loading, AlreadyOn, Intro, Scan, EmailCode, Codes }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
+    private Step _step = Step.Loading;
+    private AuthenticatorSetup? _setup;
+    private IReadOnlyList<string> _codes = [];
+    private string? _code, _error;
+    private bool _busy, _saved, _mustSetUp, _emailAvailable, _upgrade;
+    private string? _email;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState!).User;
+        _mustSetUp = Bassign.Web.Security.TwoFactorSignIn.MustSetUp(user);
+        var status = await Sender.Send(new GetTwoFactorStatusQuery(user.FindFirstValue(ClaimTypes.NameIdentifier)!));
+        _emailAvailable = status.EmailCodesAvailable;
+        _email = user.FindFirstValue(ClaimTypes.Email);
+        // On email codes you may move up to an app at any time (and an Admin must).
+        _upgrade = status.Enabled && status.Method == TwoFactorMethods.Email;
+        _mustSetUp = _mustSetUp || status.MustSetUp;
+        _step = status.Enabled && !_upgrade ? Step.AlreadyOn : Step.Intro;
+    }
+
+    private async Task StartEmailAsync()
+    {
+        _error = null;
+        _busy = true;
+        var r = await Sender.TrySend(new StartEmailTwoFactorCommand());
+        _busy = false;
+        if (!r.IsSuccess && r.Error.Code != "2fa.email_cooldown") { _error = r.Error.Message; return; }
+        if (!r.IsSuccess) _error = r.Error.Message;   // cooldown: stay on the code step and say so
+        _code = null;
+        _step = Step.EmailCode;
+    }
+
+    private async Task ConfirmEmailAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_code)) { _error = "Enter the 6-digit code."; return; }
+        _busy = true;
+        var r = await Sender.TrySend(new ConfirmEmailTwoFactorCommand(_code));
+        _busy = false;
+        if (!r.IsSuccess) { _error = r.Error.Message; return; }
+        _codes = r.Value!;
+        _step = Step.Codes;
+    }
+
+    private void BackToIntro()
+    {
+        _error = null;
+        _code = null;
+        _step = Step.Intro;
+    }
+
+    private async Task StartAsync()
+    {
+        _error = null;
+        _code = null;
+        _busy = true;
+        var r = await Sender.TrySend(new StartAuthenticatorSetupCommand());
+        _busy = false;
+        if (!r.IsSuccess) { _error = r.Error.Message; return; }
+        _setup = r.Value;
+        _step = Step.Scan;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_code)) { _error = "Enter the 6-digit code."; return; }
+        _busy = true;
+        var r = await Sender.TrySend(new ConfirmAuthenticatorSetupCommand(_code));
+        _busy = false;
+        if (!r.IsSuccess) { _error = r.Error.Message; return; }
+        _codes = r.Value!;
+        _setup = null;   // the secret leaves the page
+        _step = Step.Codes;
+    }
+
+    private async Task CopyAsync() => await JS.InvokeVoidAsync("navigator.clipboard.writeText", string.Join(Environment.NewLine, _codes));
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
+
+    // The session cookie must be re-issued (a full session, or one that no longer needs setup): a real page load.
+    private void Finish()
+    {
+        var back = string.IsNullOrWhiteSpace(ReturnUrl) || !Uri.IsWellFormedUriString(ReturnUrl, UriKind.Relative) ? (_mustSetUp ? "/" : "/profile") : ReturnUrl;
+        Nav.NavigateTo($"/account/refresh-session?returnUrl={Uri.EscapeDataString(back)}", forceLoad: true);
+    }
+}
