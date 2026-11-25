@@ -4,6 +4,8 @@ using Bassign.Application.Identity;
 using Bassign.Application.Teams;
 using Bassign.Application.Teams.InviteUser;
 using Bassign.Domain.Common;
+using Bassign.Domain.Organizations;
+using Bassign.UnitTests.Notifications;
 using Bassign.Domain.Teams;
 using Mediator;
 
@@ -65,7 +67,7 @@ public class InviteUserHandlerTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private static (InviteUserHandler Handler, FakeInvitations Invites, FakeNotifier Notifier, FakeUnitOfWork Uow) Build(
-        string currentUserId, string[]? existingEmails = null)
+        string currentUserId, string[]? existingEmails = null, OrganizationSettings? org = null)
     {
         var invites = new FakeInvitations();
         var notifier = new FakeNotifier();
@@ -73,7 +75,7 @@ public class InviteUserHandlerTests
         var handler = new InviteUserHandler(
             invites,
             new FakeIdentity([.. existingEmails ?? []], ["admin-1"]),
-            new FakeTokens(), notifier, uow, new FakeCurrentUser(currentUserId), TimeProvider.System);
+            new FakeTokens(), notifier, uow, new FakeCurrentUser(currentUserId), new OrgStore(org ?? Seed.Org()), TimeProvider.System);
         return (handler, invites, notifier, uow);
     }
 
@@ -120,5 +122,36 @@ public class InviteUserHandlerTests
         var again = await handler.Handle(new InviteUserCommand("rudo@acme.co", TeamRoles.Staff), Ct);
 
         Assert.Equal("team.already_invited", again.Error.Code);
+    }
+
+    private static OrganizationSettings Restricted(int days = 7, params string[] domains)
+    {
+        var org = Seed.Org();
+        org.ConfigureSecurity(days, domains, null, null, null);
+        return org;
+    }
+
+    [Fact]
+    public async Task Invites_outside_the_allowed_domains_are_refused()
+    {
+        var (handler, invites, _, _) = Build("admin-1", org: Restricted(7, "mintedmoments.co.zw"));
+
+        var result = await handler.Handle(new InviteUserCommand("someone@gmail.com", TeamRoles.Staff), Ct);
+
+        Assert.Equal("team.domain_not_allowed", result.Error.Code);
+        Assert.Contains("@mintedmoments.co.zw", result.Error.Message, StringComparison.Ordinal);
+        Assert.Empty(invites.Items);
+    }
+
+    [Fact]
+    public async Task Invites_to_an_allowed_domain_use_the_configured_lifetime()
+    {
+        var (handler, invites, _, _) = Build("admin-1", org: Restricted(3, "mintedmoments.co.zw", "gmail.com"));
+
+        var result = await handler.Handle(new InviteUserCommand("Rudo@MintedMoments.co.zw", TeamRoles.Staff), Ct);
+
+        Assert.True(result.IsSuccess);
+        var invite = Assert.Single(invites.Items);
+        Assert.Equal(TimeSpan.FromDays(3), invite.ExpiresAt - invite.CreatedAt);
     }
 }

@@ -48,11 +48,12 @@ public class SecurityTests
         Assert.True(new WhatsAppOptionsValidator(Production).Validate(null, new WhatsAppOptions { Provider = "simulator", WebhookToken = new string('t', 32) }).Failed);
 
     [Fact]
-    public void Live_whatsapp_needs_a_key_number_and_long_webhook_token()
+    public void Live_whatsapp_lists_what_is_missing_instead_of_failing_startup()
     {
-        var result = new WhatsAppOptionsValidator(Production).Validate(null, new WhatsAppOptions { Provider = "360dialog", WebhookToken = "short" });
-        Assert.True(result.Failed);
-        Assert.Equal(3, result.Failures!.Count());
+        var o = new WhatsAppOptions { Provider = "360dialog", WebhookToken = "short" };
+        Assert.True(new WhatsAppOptionsValidator(Production).Validate(null, o).Succeeded);   // the app still starts
+        Assert.Equal(new[] { "Business number (+263…)", "Webhook address (generate it)", "360dialog API key" }, o.Missing());
+        Assert.False(o.IsReady);
     }
 
     [Fact]

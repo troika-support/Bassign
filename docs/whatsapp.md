@@ -115,3 +115,15 @@ Replies are sent after the inbox item is marked done, so a failed send never re-
 **Development:** `WhatsApp:Provider = simulator`. Run **both** hosts; open **WhatsApp simulator** in the Web app's nav. The simulator builds a real provider-shaped webhook body and puts it through the same intake, so the API worker handles it exactly like production.
 
 **Going live (360dialog):** set `WhatsApp__Provider=360dialog`, `WhatsApp__ApiKey`, `WhatsApp__BusinessNumber`, `WhatsApp__WebhookToken` (long random), optionally `WhatsApp__AppSecret`, as environment variables on IIS — never in appsettings. Point the 360dialog webhook at `https://<api-host>/webhooks/whatsapp/<WebhookToken>`. Get the `task_assigned` template approved first (see above).
+
+## Providers (step 16b) — chosen by an Admin in Settings → WhatsApp
+| Provider | Sending | Webhook (generate it in Settings) | Notes |
+|---|---|---|---|
+| **360dialog** | Cloud API JSON, `D360-API-KEY` | `/webhooks/whatsapp/{token}` | Media fetched through 360dialog's host |
+| **Meta (Cloud API direct)** | Same JSON, `graph.facebook.com/{ver}/{phone-number-id}/messages`, system-user token | `/webhooks/whatsapp/{token}` + **verify token** (GET handshake) + **app secret** (X-Hub-Signature-256) | No BSP middleman |
+| **Twilio** | Form post to `Messages.json`; outside the window an approved **Content template (HX… SID)** per Bassign template | `/webhooks/twilio/{token}` for messages **and** status callbacks; `X-Twilio-Signature` (HMAC-SHA1, auth token) | In-window buttons/lists are sent as a **numbered menu** |
+| **Off** | — | — | Everyone gets email |
+
+- **Numbered / typed replies** work for every provider: replying `1`, `2` … or the option's word (`Accept`) picks from the last menu Bassign sent that number (24 h). This is how Twilio's template buttons (no per-task ids) map back to a task.
+- An incomplete setup never stops the app: WhatsApp counts as **off** and notifications fall back to email; Settings lists what's missing.
+- Server settings: `Public__ApiBaseUrl` (e.g. `https://api.client.co.zw`) — needed to show the webhook address. Any `WhatsApp__*` environment variable locks that value in Settings.

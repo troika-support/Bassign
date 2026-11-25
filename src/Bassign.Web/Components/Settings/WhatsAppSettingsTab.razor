@@ -1,0 +1,196 @@
+@using Bassign.Application.Messaging.Setup
+@using Bassign.Application.Settings
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+@if (_states is null || _status is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <section class="ba-card pa-5" aria-labelledby="wa-set-h">
+                <h2 class="ba-section-label" id="wa-set-h">WhatsApp</h2>
+                <p class="ba-muted ba-lead">Staff get tasks on WhatsApp and act with one tap. When WhatsApp is off, everyone gets email instead.</p>
+
+                @if (Provider == "simulator")
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">Development: messages go to the built-in WhatsApp simulator.</MudAlert>
+                }
+
+                <AdminSettingField State="@(S("WhatsApp:Provider"))" Label="Connect WhatsApp through" ChoiceLabels="ProviderLabels" OnChange="Track" />
+
+                @if (Provider is "360dialog" or "meta" or "twilio")
+                {
+                    <AdminSettingField State="@(S("WhatsApp:BusinessNumber"))" Label="Business number" HelpText="International format, e.g. +263771234567" OnChange="Track" />
+                }
+                @switch (Provider)
+                {
+                    case "360dialog":
+                        <AdminSettingField State="@(S("WhatsApp:ApiKey"))" Label="360dialog API key" OnChange="Track" />
+                        break;
+                    case "meta":
+                        <AdminSettingField State="@(S("WhatsApp:Meta:PhoneNumberId"))" Label="Phone number ID" HelpText="WhatsApp Manager → API setup (not the phone number)" OnChange="Track" />
+                        <AdminSettingField State="@(S("WhatsApp:ApiKey"))" Label="Access token" HelpText="A permanent system-user token with whatsapp_business_messaging" OnChange="Track" />
+                        <AdminSettingField State="@(S("WhatsApp:AppSecret"))" Label="App secret" HelpText="Meta app → Settings → Basic; used to verify webhooks" OnChange="Track" />
+                        break;
+                    case "twilio":
+                        <AdminSettingField State="@(S("WhatsApp:Twilio:AccountSid"))" Label="Account SID" OnChange="Track" />
+                        <AdminSettingField State="@(S("WhatsApp:Twilio:AuthToken"))" Label="Auth token" OnChange="Track" />
+                        <h3 class="ba-section-label mt-4">Approved templates (Content SIDs, HX…)</h3>
+                        <AdminSettingField State="@(S("WhatsApp:Twilio:Templates:task_assigned"))" Label="New task" OnChange="Track" />
+                        <AdminSettingField State="@(S("WhatsApp:Twilio:Templates:task_reminder"))" Label="Reminder" OnChange="Track" />
+                        <AdminSettingField State="@(S("WhatsApp:Twilio:Templates:task_overdue"))" Label="Overdue" OnChange="Track" />
+                        <AdminSettingField State="@(S("WhatsApp:Twilio:Templates:daily_digest"))" Label="Daily digest" OnChange="Track" />
+                        break;
+                }
+                @if (Provider is "360dialog" or "meta" or "twilio")
+                {
+                    <AdminSettingField State="@(S("WhatsApp:TemplateLanguage"))" Label="Template language" HelpText="As approved, e.g. en or en_GB" OnChange="Track" />
+                }
+
+                @if (_status.Enabled && !_status.Ready && _pending.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">WhatsApp is off (everyone gets email) until these are done: @string.Join(", ", _status.Missing).</MudAlert>
+                }
+
+                <div class="d-flex flex-wrap gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _pending.Count == 0)" OnClick="Save">Save</MudButton>
+                    @if (_pending.Count > 0) { <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="Load">Discard changes</MudButton> }
+                </div>
+            </section>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            @if (Provider is "360dialog" or "meta" or "twilio")
+            {
+                <section class="ba-card pa-5 mb-3" aria-labelledby="wa-hook-h">
+                    <h2 class="ba-section-label" id="wa-hook-h">Webhook address</h2>
+                    <p class="ba-muted ba-lead">
+                        Paste this into @(Provider switch { "meta" => "your Meta app → WhatsApp → Configuration (Callback URL)", "twilio" => "Twilio → your WhatsApp sender → \"When a message comes in\" and the status callback", _ => "360dialog Hub → your number → webhook" }).
+                        It's shown once; generate a new one any time (then update it there too).
+                    </p>
+                    @if (_secrets is not null)
+                    {
+                        <div class="ba-secret-reveal" role="status">
+                            <div class="ba-setting__label">Webhook address</div>
+                            <code>@_secrets.Url</code>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="() => Copy(_secrets.Url)">Copy</MudButton>
+                            @if (_secrets.VerifyToken is { } verify)
+                            {
+                                <div class="ba-setting__label mt-3">Verify token</div>
+                                <code>@verify</code>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="() => Copy(verify)">Copy</MudButton>
+                            }
+                        </div>
+                    }
+                    else if (_status.WebhookGenerated && _status.WebhookPathPattern is { } pattern)
+                    {
+                        <p class="ba-setting__value" style="overflow-wrap:anywhere;">@pattern</p>
+                    }
+                    @if (!_status.ApiAddressKnown)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true">The API's public address isn't set on the server (Public__ApiBaseUrl).</MudAlert>
+                    }
+                    <MudButton Variant="Variant.Outlined" Class="mt-2" Disabled="@(_busy || _pending.Count > 0 || !_status.ApiAddressKnown)" OnClick="Generate"
+                               StartIcon="@Icons.Material.Outlined.Key">@(_status.WebhookGenerated ? "Generate new address" : "Generate address")</MudButton>
+                </section>
+            }
+
+            <section class="ba-card pa-5 mb-3" aria-labelledby="wa-test-h">
+                <h2 class="ba-section-label" id="wa-test-h">Send a test</h2>
+                <p class="ba-muted ba-lead">First send "hi" from your phone to the business number — WhatsApp only allows a reply within 24 hours of that.</p>
+                <form @onsubmit="SendTest" class="d-flex gap-2 align-start">
+                    <MudTextField @bind-Value="_testTo" Label="Your WhatsApp number" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="+263771234567" />
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Class="mt-1" Disabled="@(_busy || !_status.Ready || _pending.Count > 0)">Send test</MudButton>
+                </form>
+                @if (_testResult is not null)
+                {
+                    <MudAlert Severity="@(_testOk ? Severity.Success : Severity.Error)" Dense="true" Class="mt-2">@_testResult</MudAlert>
+                }
+            </section>
+
+            <section class="ba-card pa-5" aria-labelledby="wa-tpl-h">
+                <h2 class="ba-section-label" id="wa-tpl-h">Templates to get approved</h2>
+                <p class="ba-muted ba-lead">Needed to message people who haven't written in the last 24 hours. Category: Utility. Details in docs/notifications.md.</p>
+                <ul class="ba-help">
+                    <li><code>task_assigned</code> — title, due date · buttons Accept, Decline</li>
+                    <li><code>task_reminder</code> — title, due date · button View task</li>
+                    <li><code>task_overdue</code> — title, assignee, due date</li>
+                    <li><code>daily_digest</code> — organisation, counts, summary</li>
+                </ul>
+            </section>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private static readonly IReadOnlyDictionary<string, string> ProviderLabels = new Dictionary<string, string>
+    {
+        ["none"] = "Off (email only)", ["360dialog"] = "360dialog", ["meta"] = "Meta (WhatsApp Cloud API)", ["twilio"] = "Twilio"
+    };
+
+    private IReadOnlyList<SettingState>? _states;
+    private WhatsAppSetupStatus? _status;
+    private WebhookSecrets? _secrets;
+    private readonly Dictionary<string, SettingChange> _pending = new(StringComparer.OrdinalIgnoreCase);
+    private string _testTo = "";
+    private string? _testResult;
+    private bool _busy, _testOk;
+
+    private SettingState S(string key) => _states!.First(s => string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    private string Provider =>
+        (_pending.TryGetValue("WhatsApp:Provider", out var p) ? p.Value : S("WhatsApp:Provider").Value)?.ToLowerInvariant() ?? "none";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _pending.Clear();
+        _states = await Sender.Send(new GetAdminSettingsQuery("WhatsApp"));
+        _status = await Sender.Send(new GetWhatsAppStatusQuery());
+    }
+
+    private void Track(KeyValuePair<string, SettingChange> change) => _pending[change.Key] = change.Value;
+
+    private async Task Save()
+    {
+        _busy = true;
+        var result = await Sender.TrySend(new SaveAdminSettingsCommand(new Dictionary<string, SettingChange>(_pending)));
+        _busy = false;
+        if (!result.IsSuccess) { Snackbar.Add(result.Error.Message, Severity.Error); return; }
+        Snackbar.Add("WhatsApp settings saved.", Severity.Success);
+        _states = null;
+        await Load();
+    }
+
+    private async Task Generate()
+    {
+        _busy = true;
+        var result = await Sender.TrySend(new GenerateWhatsAppWebhookCommand(Provider));
+        _busy = false;
+        if (!result.IsSuccess) { Snackbar.Add(result.Error.Message, Severity.Error); return; }
+        _secrets = result.Value;
+        _status = await Sender.Send(new GetWhatsAppStatusQuery());
+    }
+
+    private async Task Copy(string text)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); Snackbar.Add("Copied.", Severity.Info); }
+        catch (JSException) { Snackbar.Add("Couldn't copy — select it and copy manually.", Severity.Info); }
+    }
+
+    private async Task SendTest()
+    {
+        _busy = true;
+        _testResult = null;
+        var result = await Sender.TrySend(new SendTestWhatsAppCommand(_testTo.Trim()));
+        _busy = false;
+        _testOk = result.IsSuccess;
+        _testResult = result.IsSuccess ? "Sent — check WhatsApp on that phone." : result.Error.Message;
+    }
+}

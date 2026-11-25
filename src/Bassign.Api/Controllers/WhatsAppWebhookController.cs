@@ -19,7 +19,7 @@ namespace Bassign.Api.Controllers;
 [AllowAnonymous]
 [EnableRateLimiting(Hardening.WebhookPolicy)]
 public sealed class WhatsAppWebhookController(
-    IOptions<WhatsAppOptions> options,
+    IOptionsMonitor<WhatsAppOptions> options,
     WhatsAppWebhookIntake intake,
     InboxSignal signal,
     ILogger<WhatsAppWebhookController> logger) : ControllerBase
@@ -34,8 +34,8 @@ public sealed class WhatsAppWebhookController(
         [FromQuery(Name = "hub.verify_token")] string? verifyToken,
         [FromQuery(Name = "hub.challenge")] string? challenge)
     {
-        var o = options.Value;
-        if (!WebhookSignature.TokenMatches(o.WebhookToken, token)) return NotFound();
+        var o = options.CurrentValue;
+        if (!o.UsesCloudWebhook || !WebhookSignature.TokenMatches(o.WebhookToken, token)) return NotFound();
         if (mode == "subscribe" && challenge is not null && WebhookSignature.TokenMatches(o.VerifyToken, verifyToken))
             return Content(challenge, "text/plain");
         return StatusCode(StatusCodes.Status403Forbidden);
@@ -45,9 +45,9 @@ public sealed class WhatsAppWebhookController(
     [RequestSizeLimit(MaxBodyBytes)]
     public async Task<IActionResult> Receive(string token, CancellationToken ct)
     {
-        var o = options.Value;
-        if (!WebhookSignature.TokenMatches(o.WebhookToken, token))
-            return NotFound();   // don't confirm the endpoint exists
+        var o = options.CurrentValue;
+        if (!o.UsesCloudWebhook || !WebhookSignature.TokenMatches(o.WebhookToken, token))
+            return NotFound();   // don't confirm the endpoint exists (or that another provider is in use)
 
         using var buffer = new MemoryStream();
         await Request.Body.CopyToAsync(buffer, ct);

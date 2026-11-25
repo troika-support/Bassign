@@ -1,6 +1,7 @@
 using Bassign.Application.Ai;
 using Bassign.Application.Common.Auditing;
 using Bassign.Application.Privacy;
+using Bassign.Application.Settings;
 using Bassign.Application.Common.Email;
 using Bassign.Application.Common.Persistence;
 using Bassign.Application.Common.Security;
@@ -9,6 +10,7 @@ using Bassign.Application.Identity;
 using Bassign.Application.Common.Events;
 using Bassign.Application.Media;
 using Bassign.Application.Messaging;
+using Bassign.Application.Messaging.Setup;
 using Bassign.Application.Messaging.Simulator;
 using Bassign.Application.Notifications;
 using Bassign.Application.Sync;
@@ -19,6 +21,8 @@ using Bassign.Infrastructure.Ai;
 using Bassign.Infrastructure.Email;
 using Bassign.Infrastructure.Options;
 using Bassign.Infrastructure.Privacy;
+using Bassign.Infrastructure.Settings;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Bassign.Infrastructure.Persistence;
@@ -60,14 +64,13 @@ public static class DependencyInjection
 
         // Data Protection keys (cookies, antiforgery): persisted so restarts don't sign everyone out, and
         // encrypted at rest with DPAPI (machine key) on Windows/IIS. Set DataProtection:KeysPath on IIS.
-        var keysPath = configuration["DataProtection:KeysPath"] is { Length: > 0 } configured
-            ? configured
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Bassign", "keys");
         var dataProtection = services.AddDataProtection()
-            .SetApplicationName("Bassign")
-            .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
-        if (OperatingSystem.IsWindows())
-            dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: true);
+            .PersistKeysToFileSystem(new DirectoryInfo(SettingsProtection.KeysDirectory(configuration)));
+        SettingsProtection.Configure(dataProtection);   // same app name + DPAPI as the Admin-settings source
+
+        // Admin settings (step 16b): a whitelist of keys stored encrypted in the database; server env vars lock them.
+        services.TryAddSingleton(new ServerLockedSettings(new ConfigurationBuilder().AddEnvironmentVariables().Build()));
+        services.AddScoped<IAdminSettingsStore, AdminSettingsStore>();
 
         // Startup validation: misconfiguration fails fast with a readable message (secrets never echoed).
         services.AddSingleton<IValidateOptions<WhatsAppOptions>, WhatsAppOptionsValidator>();
@@ -83,7 +86,7 @@ public static class DependencyInjection
         services.AddScoped<IPersonalDataEraser, PersonalDataEraser>();
         services.AddScoped<IRetentionStore, RetentionStore>();
         services.AddOptions<RetentionOptions>().Bind(configuration.GetSection(RetentionOptions.Section));
-        services.AddSingleton(sp => sp.GetRequiredService<IOptions<RetentionOptions>>().Value.ToPolicy());
+        services.AddScoped(sp => sp.GetRequiredService<IOptionsMonitor<RetentionOptions>>().CurrentValue.ToPolicy());   // live: Admin-editable
 
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -99,6 +102,7 @@ public static class DependencyInjection
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+        services.AddScoped<Bassign.Application.Tasks.Settings.ITaskCategoryRepository, TaskCategoryRepository>();
         services.AddScoped<IIdentityAdmin, IdentityAdmin>();
         services.AddScoped<IInviteNotifier, EmailInviteNotifier>();
         services.AddSingleton<ISecureTokens, SecureTokens>();
@@ -114,41 +118,38 @@ public static class DependencyInjection
 
         // WhatsApp (docs/whatsapp.md): provider behind IWhatsAppClient; simulator in development.
         services.AddOptions<WhatsAppOptions>().Bind(configuration.GetSection(WhatsAppOptions.Section));
-        services.AddSingleton<IWhatsAppSettings, WhatsAppSettings>();
+        services.AddSingleton<IWhatsAppSettings, WhatsAppSettings>();   // live (IOptionsMonitor)
         services.AddScoped<IWhatsAppBindingRepository, WhatsAppBindingRepository>();
         services.AddScoped<IWhatsAppLog, WhatsAppLog>();
         services.AddSingleton<SimulatorMediaStore>();
-        var whatsApp = configuration.GetSection(WhatsAppOptions.Section).Get<WhatsAppOptions>() ?? new WhatsAppOptions();
-        if (whatsApp.IsSimulator)
-        {
-            services.AddScoped<IWhatsAppClient, SimulatorWhatsAppClient>();
-        }
-        else
-        {
-            services.AddHttpClient<IWhatsAppClient, Dialog360WhatsAppClient>(client =>
-                {
-                    client.BaseAddress = new Uri(whatsApp.BaseUrl);
-                    client.DefaultRequestHeaders.Add("D360-API-KEY", whatsApp.ApiKey);
-                })
-                .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
-        }
+        // Every provider is registered; RoutingWhatsAppClient picks the configured one at send time (Settings → WhatsApp).
+        services.AddScoped<IWhatsAppTransport, SimulatorWhatsAppClient>();
+        services.AddHttpClient<Dialog360Transport>().AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
+        services.AddScoped<IWhatsAppTransport>(sp => sp.GetRequiredService<Dialog360Transport>());
+        services.AddHttpClient<MetaCloudTransport>().AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
+        services.AddScoped<IWhatsAppTransport>(sp => sp.GetRequiredService<MetaCloudTransport>());
+        services.AddHttpClient<TwilioTransport>().AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
+        services.AddScoped<IWhatsAppTransport>(sp => sp.GetRequiredService<TwilioTransport>());
+        services.AddScoped<IWhatsAppClient, RoutingWhatsAppClient>();
+        services.AddScoped<IWhatsAppSetup, WhatsAppSetup>();
+        services.AddOptions<PublicOptions>().Bind(configuration.GetSection(PublicOptions.Section)).ValidateOnStart();
+        services.AddSingleton<IValidateOptions<PublicOptions>, PublicOptionsValidator>();
         services.AddScoped<INotificationChannel, WhatsAppChannel>();   // tried first …
 
         // Email (spec §3.C.1 fallback; invites). Provider "pickup" in development writes .eml files.
-        var emailSection = configuration.GetSection(EmailOptions.Section);
-        services.AddOptions<EmailOptions>().Bind(emailSection);
-        var email = emailSection.Get<EmailOptions>() ?? new EmailOptions();
-        if (email.IsSendGrid)
-            services.AddHttpClient<IEmailSender, SendGridEmailSender>(client =>
-                {
-                    client.BaseAddress = new Uri("https://api.sendgrid.com/");
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", email.ApiKey);
-                })
-                .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
-        else if (email.IsDisabled)
-            services.AddSingleton<IEmailSender, DisabledEmailSender>();
-        else
-            services.AddSingleton<IEmailSender, PickupFolderEmailSender>();
+        // Every provider is registered; RoutingEmailSender picks the configured one at send time (Settings → Email).
+        services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.Section));
+        services.AddSingleton<GraphTokenCache>();
+        services.AddScoped<IEmailTransport, SmtpEmailTransport>();
+        services.AddScoped<IEmailTransport, PickupFolderEmailTransport>();
+        services.AddHttpClient<SendGridEmailTransport>(client => client.BaseAddress = new Uri("https://api.sendgrid.com/"))
+            .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
+        services.AddScoped<IEmailTransport>(sp => sp.GetRequiredService<SendGridEmailTransport>());
+        services.AddHttpClient<GraphEmailTransport>()
+            .AddStandardResilienceHandler(options => options.Retry.DisableForUnsafeHttpMethods());
+        services.AddScoped<IEmailTransport>(sp => sp.GetRequiredService<GraphEmailTransport>());
+        services.AddScoped<IEmailSender, RoutingEmailSender>();
+        services.AddScoped<IEmailSetup, EmailSetup>();
         services.AddScoped<INotificationChannel, EmailChannel>();      // … then email
 
         // Inbound: webhook → durable inbox (dedupe) → worker → conversation (docs/whatsapp.md)
@@ -162,13 +163,13 @@ public static class DependencyInjection
         // AI (spec §3.F): provider is config only. No key ⇒ clients are null and features fall back.
         var aiSection = configuration.GetSection(AiOptions.Section);
         services.AddOptions<AiOptions>().Bind(aiSection);
-        var ai = aiSection.Get<AiOptions>() ?? new AiOptions();
-        services.AddSingleton(_ => new AiClients(AiClientFactory.CreateChatClient(ai), AiClientFactory.CreateEmbeddingGenerator(ai)));
+        services.AddSingleton(sp => new AiClients(sp.GetRequiredService<IOptionsMonitor<AiOptions>>()));   // live: follows Settings → AI
         services.AddSingleton<IAiUsageMeter, AiUsageMeter>();
         services.AddScoped<ChatAiAssistant>();
         services.AddScoped<ITaskAssignmentAssistant>(sp => sp.GetRequiredService<ChatAiAssistant>());
         services.AddScoped<ISummaryGenerator>(sp => sp.GetRequiredService<ChatAiAssistant>());
         services.AddScoped<ITaskSimilarity, EmbeddingTaskSimilarity>();
+        services.AddScoped<IAiSetup, AiSetup>();
 
         return services;
     }

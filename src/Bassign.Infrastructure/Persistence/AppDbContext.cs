@@ -13,6 +13,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
+    public DbSet<TaskCategory> TaskCategories => Set<TaskCategory>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
@@ -22,8 +23,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<InboundWebhookMessage> InboundWebhookMessages => Set<InboundWebhookMessage>();
     public DbSet<OutboundNotification> OutboundNotifications => Set<OutboundNotification>();
     public DbSet<OrganizationSettings> OrganizationSettings => Set<OrganizationSettings>();
+    public DbSet<OrgClosure> OrgClosures => Set<OrgClosure>();
     public DbSet<Bassign.Infrastructure.Ai.AiUsageRecord> AiUsage => Set<Bassign.Infrastructure.Ai.AiUsageRecord>();
     public DbSet<Bassign.Infrastructure.Privacy.ConsentRecord> Consents => Set<Bassign.Infrastructure.Privacy.ConsentRecord>();
+    public DbSet<Bassign.Infrastructure.Settings.AppSetting> AppSettings => Set<Bassign.Infrastructure.Settings.AppSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

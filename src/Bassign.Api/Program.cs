@@ -1,3 +1,4 @@
+using Bassign.Infrastructure.Settings;
 using Bassign.Api;
 using Bassign.Application;
 using Bassign.Infrastructure;
@@ -11,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddBassignAdminSettings();   // Admin-set values from the database: above appsettings, below env vars
 
 builder.Host.UseSerilog((context, loggerConfig) => loggerConfig
     .ReadFrom.Configuration(context.Configuration)

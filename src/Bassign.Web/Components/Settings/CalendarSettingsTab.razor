@@ -1,0 +1,183 @@
+@using Bassign.Application.Organizations.Calendar
+@using System.Globalization
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+
+@if (_vm is null || _form is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <section class="ba-card pa-5 mb-3" aria-labelledby="cal-h">
+                <h2 class="ba-section-label" id="cal-h">Working days and hours</h2>
+                <p class="ba-muted ba-lead">Outside these times, and on public holidays, new-task messages and reminders wait for the next working morning. Escalations to managers still go out.</p>
+
+                <fieldset class="ba-fieldset">
+                    <legend class="ba-label">Working days</legend>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var day in Week)
+                        {
+                            var d = day;
+                            <MudCheckBox T="bool" Value="IsOn(d)" ValueChanged="on => Toggle(d, on)" Label="@Culture.DateTimeFormat.GetDayName(d)" Class="ml-n2 mr-3" />
+                        }
+                    </div>
+                </fieldset>
+
+                <MudGrid Spacing="2" Class="mt-2">
+                    <MudItem xs="6">
+                        <MudSelect T="int" @bind-Value="_form.WorkStartHour" Label="Work starts" Variant="Variant.Outlined">
+                            @foreach (var h in Enumerable.Range(0, 24)) { <MudSelectItem T="int" Value="h">@Hour(h)</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudSelect T="int" @bind-Value="_form.WorkEndHour" Label="Work ends" Variant="Variant.Outlined"
+                                   Error="_form.WorkEndHour <= _form.WorkStartHour" ErrorText="Must be after the start">
+                            @foreach (var h in Enumerable.Range(1, 24)) { <MudSelectItem T="int" Value="h">@Hour(h)</MudSelectItem> }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+
+                <MudSwitch T="bool" @bind-Value="_form.HoldOutsideWorkingTime" Color="Color.Primary" Class="mt-3"
+                           Label="Hold staff messages until working time" />
+                <MudSwitch T="bool" @bind-Value="_form.ObservePublicHolidays" Color="Color.Primary"
+                           Label="Observe Zimbabwe public holidays" />
+                <p class="ba-muted" style="margin:4px 0 0;">The daily digest is skipped on days off either way — Monday's covers the weekend.</p>
+
+                <div class="d-flex gap-2 mt-5">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy || !Valid" OnClick="Save">Save</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="UseRecommended">Use recommended</MudButton>
+                </div>
+            </section>
+
+            <section class="ba-card pa-5" aria-labelledby="closure-h">
+                <h2 class="ba-section-label" id="closure-h">Add a day off</h2>
+                <p class="ba-muted ba-lead">For a company shutdown, or a holiday the Government announces at short notice.</p>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="5">
+                        <MudDatePicker Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Date="_closureDate" Label="Date" Editable="true"
+                                       MinDate="_vm.Today.ToDateTime(TimeOnly.MinValue)" />
+                    </MudItem>
+                    <MudItem xs="12" sm="7">
+                        <MudTextField T="string" @bind-Value="_closureName" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      MaxLength="100" Placeholder="e.g. Year-end shutdown" />
+                    </MudItem>
+                </MudGrid>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-3" Disabled="_busy || _closureDate is null || string.IsNullOrWhiteSpace(_closureName)"
+                           OnClick="AddClosure" StartIcon="@Icons.Material.Outlined.EventBusy">Add day off</MudButton>
+            </section>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <section class="ba-card pa-5" aria-labelledby="upcoming-h">
+                <h2 class="ba-section-label" id="upcoming-h">Days off in the next 12 months</h2>
+                @if (!_vm.Settings.ObservePublicHolidays)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">Public holidays are treated as working days. Turn on "Observe Zimbabwe public holidays" to hold messages on them.</MudAlert>
+                }
+                <ul class="ba-daylist">
+                    @foreach (var day in _vm.Upcoming)
+                    {
+                        <li class="@(day.IsPublicHoliday && !_vm.Settings.ObservePublicHolidays ? "ba-daylist__off" : null)">
+                            <span class="ba-daylist__date">@day.Date.ToString("ddd d MMM yyyy", Culture)</span>
+                            <span class="ba-daylist__name">
+                                @day.Name
+                                @if (!day.FallsOnWorkingDay) { <span class="ba-muted"> · not a working day</span> }
+                            </span>
+                            @if (day.ClosureId is { } id)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Disabled="_busy"
+                                               aria-label="@($"Remove {day.Name} on {day.Date.ToString("d MMMM", Culture)}")" OnClick="() => RemoveClosure(id)" />
+                            }
+                            else
+                            {
+                                <span class="ba-pill">Public holiday</span>
+                            }
+                        </li>
+                    }
+                </ul>
+                <p class="ba-muted" style="margin:12px 0 0;">Holidays follow the Public Holidays and Prohibition of Business Act. When a holiday falls on a Sunday, the Monday is off.</p>
+            </section>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private sealed class Form
+    {
+        public int WorkingDaysMask { get; set; }
+        public int WorkStartHour { get; set; }
+        public int WorkEndHour { get; set; }
+        public bool HoldOutsideWorkingTime { get; set; }
+        public bool ObservePublicHolidays { get; set; }
+    }
+
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-GB");
+    private static readonly DayOfWeek[] Week =
+        [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+    private WorkCalendarVm? _vm;
+    private Form? _form;
+    private bool _busy;
+    private DateTime? _closureDate;
+    private string? _closureName;
+
+    private bool Valid => _form is { WorkingDaysMask: > 0 } f && f.WorkEndHour > f.WorkStartHour;
+    private static string Hour(int h) => h == 24 ? "24:00 (midnight)" : $"{h:00}:00";
+    private bool IsOn(DayOfWeek d) => (_form!.WorkingDaysMask & (1 << (int)d)) != 0;
+    private void Toggle(DayOfWeek d, bool on) =>
+        _form!.WorkingDaysMask = on ? _form.WorkingDaysMask | (1 << (int)d) : _form.WorkingDaysMask & ~(1 << (int)d);
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _vm = await Sender.Send(new GetWorkCalendarQuery());
+        var s = _vm.Settings;
+        _form = new Form
+        {
+            WorkingDaysMask = s.WorkingDaysMask, WorkStartHour = s.WorkStartHour, WorkEndHour = s.WorkEndHour,
+            HoldOutsideWorkingTime = s.HoldOutsideWorkingTime, ObservePublicHolidays = s.ObservePublicHolidays
+        };
+    }
+
+    private void UseRecommended() => _form = new Form
+    {
+        WorkingDaysMask = 0b0111110, WorkStartHour = 8, WorkEndHour = 17, HoldOutsideWorkingTime = true, ObservePublicHolidays = true
+    };
+
+    private async Task Save()
+    {
+        if (_form is null) return;
+        _busy = true;
+        var result = await Sender.TrySend(new SaveWorkCalendarCommand(new WorkCalendarSettingsVm(
+            _form.WorkingDaysMask, _form.WorkStartHour, _form.WorkEndHour, _form.HoldOutsideWorkingTime, _form.ObservePublicHolidays)));
+        _busy = false;
+        Snackbar.Add(result.IsSuccess ? "Work calendar saved." : result.Error.Message, result.IsSuccess ? Severity.Success : Severity.Error);
+        if (result.IsSuccess) await Load();
+    }
+
+    private async Task AddClosure()
+    {
+        if (_closureDate is not { } date || string.IsNullOrWhiteSpace(_closureName)) return;
+        _busy = true;
+        var result = await Sender.TrySend(new AddClosureCommand(DateOnly.FromDateTime(date), _closureName));
+        _busy = false;
+        if (!result.IsSuccess) { Snackbar.Add(result.Error.Message, Severity.Error); return; }
+        Snackbar.Add($"{_closureName.Trim()} added.", Severity.Success);
+        _closureDate = null;
+        _closureName = null;
+        await Load();
+    }
+
+    private async Task RemoveClosure(Guid id)
+    {
+        _busy = true;
+        var result = await Sender.TrySend(new RemoveClosureCommand(id));
+        _busy = false;
+        Snackbar.Add(result.IsSuccess ? "Day off removed." : result.Error.Message, result.IsSuccess ? Severity.Success : Severity.Error);
+        await Load();
+    }
+}

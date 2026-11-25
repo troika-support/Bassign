@@ -97,3 +97,14 @@ html, body { margin:0; background:var(--ba-bg); color:var(--ba-ink);
 
 /* The footer is gone; let the list breathe to the bottom edge */
 .ba-field__foot { display:none; }
+
+/* Decline reason sheet */
+.ba-visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+.ba-reasons { border:0; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.ba-reason { display:flex; align-items:center; gap:12px; min-height:48px; padding:0 14px; border:1px solid var(--ba-line);
+  border-radius:12px; cursor:pointer; font-size:1rem; }
+.ba-reason input { width:20px; height:20px; accent-color:var(--ba-accent); margin:0; }
+.ba-reason--on { border-color:var(--ba-accent); background:var(--ba-accent-tint, #EEF2FF); }
+.ba-reason:focus-within { outline:3px solid var(--ba-accent); outline-offset:2px; }
+textarea.ba-input { padding:12px 14px; min-height:72px; resize:vertical; font-family:inherit; }
+.ba-sheet { max-height:90vh; overflow-y:auto; }

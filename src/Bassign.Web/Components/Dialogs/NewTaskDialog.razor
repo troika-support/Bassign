@@ -1,4 +1,5 @@
 @using Bassign.Application.Tasks.CreateTask
+@using Bassign.Application.Tasks.Settings
 @inject IUiSender Sender
 @inject OrgClock Clock
 
@@ -12,9 +13,15 @@
             </div>
             <div style="flex:1; min-width:140px;">
                 <MudTimePicker Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Time="_time" Label="Time (optional)" AmPm="true" Editable="true" Clearable="true"
-                               Disabled="@(_due is null)" HelperText="Blank = end of the day" />
+                               Disabled="@(_due is null)" HelperText="@DueHelp" />
             </div>
         </div>
+        @if (_defaults is { Categories.Count: > 0 })
+        {
+            <MudSelect T="Guid?" @bind-Value="_categoryId" Label="Category (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="mb-3">
+                @foreach (var c in _defaults.Categories) { <MudSelectItem T="Guid?" Value="@c.Id">@c.Name</MudSelectItem> }
+            </MudSelect>
+        }
         <MudCheckBox @bind-Value="_requiresProof" Label="Require a proof-of-work photo" Class="ml-n3" />
         @if (_error is not null)
         {
@@ -35,6 +42,16 @@
     private DateTime? _due;
     private TimeSpan? _time;
     private bool _requiresProof;
+    private Guid? _categoryId;
+    private TaskDefaultsVm? _defaults;
+
+    private string DueHelp => _defaults is { } d ? $"Blank = end of the working day ({d.DefaultDueTime:hh\\:mm})" : "Blank = end of the working day";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _defaults = await Sender.Send(new GetTaskDefaultsQuery());
+        _requiresProof = _defaults.ProofRequiredByDefault;
+    }
     private string? _error;
     private bool _busy;
 
@@ -42,8 +59,8 @@
     {
         _busy = true;
         _error = null;
-        DateTimeOffset? due = _due is { } d ? OrgClock.FromPicker(d, _time, await Clock.ZoneAsync()) : null;
-        var r = await Sender.TrySend(new CreateTaskCommand(_title, _detail, due, _requiresProof, null));
+        DateTimeOffset? due = _due is { } d ? OrgClock.FromPicker(d, _time, await Clock.ZoneAsync(), _defaults?.DefaultDueTime) : null;
+        var r = await Sender.TrySend(new CreateTaskCommand(_title, _detail, due, _requiresProof, null, _categoryId));
         if (r.IsSuccess) MudDialog.Close(DialogResult.Ok(true));
         else { _error = r.Error.Message; _busy = false; }
     }

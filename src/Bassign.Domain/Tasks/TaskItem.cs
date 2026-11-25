@@ -22,6 +22,10 @@ public sealed class TaskItem : IHasDomainEvents
     public string? ProofPhotoRef { get; private set; }
     public DateTimeOffset CreatedAt { get; private init; }
     public DateTimeOffset? CompletedAt { get; private set; }
+    public Guid? CategoryId { get; private set; }
+    public string? DeclineReason { get; private set; }
+
+    public const int DeclineReasonMaxLength = 500;
 
     public IReadOnlyList<IDomainEvent> DomainEvents => _events;
     public void ClearDomainEvents() => _events.Clear();
@@ -34,7 +38,8 @@ public sealed class TaskItem : IHasDomainEvents
         DateTimeOffset nowUtc,
         string? detail = null,
         DateTimeOffset? dueDate = null,
-        bool requiresProofPhoto = false)
+        bool requiresProofPhoto = false,
+        Guid? categoryId = null)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new ArgumentException("Title is required.", nameof(title));
@@ -52,6 +57,7 @@ public sealed class TaskItem : IHasDomainEvents
             Status = TaskStatus.Todo,
             CreatedById = createdById,
             RequiresProofPhoto = requiresProofPhoto,
+            CategoryId = categoryId,
             CreatedAt = nowUtc
         };
         task._events.Add(new TaskCreated(task.Id, task.Title));
@@ -70,6 +76,14 @@ public sealed class TaskItem : IHasDomainEvents
         Title = title.Trim();
         Detail = detail;
         DueDate = dueDate;
+        _events.Add(new TaskUpdated(Id));
+    }
+
+    /// <summary>Set or clear the category. Allowed on closed tasks too — it's filing, not work.</summary>
+    public void ChangeCategory(Guid? categoryId)
+    {
+        if (CategoryId == categoryId) return;
+        CategoryId = categoryId;
         _events.Add(new TaskUpdated(Id));
     }
 
@@ -113,7 +127,11 @@ public sealed class TaskItem : IHasDomainEvents
         if (Status != TaskStatus.Todo)
             throw new InvalidOperationException("Only a to-do task can be declined.");
 
+        var why = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (why is { Length: > DeclineReasonMaxLength }) why = why[..DeclineReasonMaxLength];
+
         Status = TaskStatus.Declined;
-        _events.Add(new TaskDeclined(Id, reason));
+        DeclineReason = why;
+        _events.Add(new TaskDeclined(Id, why));
     }
 }

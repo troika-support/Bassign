@@ -1,6 +1,5 @@
 using Bassign.Infrastructure.Identity;
 using Bassign.Infrastructure.Options;
-using Microsoft.Extensions.Options;
 
 namespace Bassign.UnitTests.Identity;
 
@@ -31,7 +30,7 @@ public class RefreshTokenServiceTests
     }
 
     private static RefreshTokenService CreateSut(FakeStore store) =>
-        new(store, Options.Create(new AuthOptions { RefreshTokenDays = 30 }), TimeProvider.System);
+        new(store, new TestOptionsMonitor<AuthOptions>(new AuthOptions { RefreshTokenDays = 30 }), TimeProvider.System);
 
     [Fact]
     public async Task Rotate_issues_new_token_and_revokes_the_old()

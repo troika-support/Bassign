@@ -59,7 +59,7 @@ public static partial class AssignmentEval
     }
 
     public static ChatAiAssistant AssistantFor(IChatClient client, AiOptions? options = null) =>
-        new(new AiClients(client, null), Microsoft.Extensions.Options.Options.Create(options ?? new AiOptions()),
+        new(new AiClients(client, null), new TestOptionsMonitor<AiOptions>(options ?? new AiOptions()),
             new RecordingMeter(), TimeProvider.System, NullLogger<ChatAiAssistant>.Instance);
 
     /// <summary>A perfect "model" for testing the harness: finds the expected person's key in the prompt.</summary>

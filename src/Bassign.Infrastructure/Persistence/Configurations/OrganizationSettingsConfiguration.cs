@@ -19,5 +19,33 @@ public sealed class OrganizationSettingsConfiguration : IEntityTypeConfiguration
         builder.Property(o => o.Name).HasMaxLength(100).IsRequired();
         builder.Property(o => o.AccentHex).HasMaxLength(7).IsRequired();
         builder.Property(o => o.TimeZoneId).HasMaxLength(64).IsRequired();
+
+        // Work calendar: nullable, null = default (see OrganizationSettings). Same no-database-default rule.
+        builder.Property(o => o.WorkingDaysMask).HasColumnName("WorkingDays");
+        builder.Property(o => o.WorkStartHourSetting).HasColumnName("WorkStartHour");
+        builder.Property(o => o.WorkEndHourSetting).HasColumnName("WorkEndHour");
+        builder.Property(o => o.HoldOutsideWorkingTimeSetting).HasColumnName("HoldOutsideWorkingTime");
+        builder.Property(o => o.ObservePublicHolidaysSetting).HasColumnName("ObservePublicHolidays");
+        builder.Ignore(o => o.WorkingDays);
+        builder.Ignore(o => o.WorkStartHour);
+        builder.Ignore(o => o.WorkEndHour);
+        builder.Ignore(o => o.HoldOutsideWorkingTime);
+        builder.Ignore(o => o.ObservePublicHolidays);
+
+        // Task defaults: same pattern.
+        builder.Property(o => o.ProofRequiredByDefaultSetting).HasColumnName("ProofRequiredByDefault");
+        builder.Property(o => o.DeclineReasonRequiredSetting).HasColumnName("DeclineReasonRequired");
+        builder.Ignore(o => o.ProofRequiredByDefault);
+        builder.Ignore(o => o.DeclineReasonRequired);
+        builder.Ignore(o => o.DefaultDueTime);
+
+        // Security & privacy.
+        builder.Property(o => o.InviteLifetimeDaysSetting).HasColumnName("InviteLifetimeDays");
+        builder.Property(o => o.AllowedInviteDomains).HasMaxLength(500);
+        builder.Property(o => o.PrivacyContactName).HasMaxLength(100);
+        builder.Property(o => o.PrivacyContactEmail).HasMaxLength(256);
+        builder.Property(o => o.PrivacyContactPhone).HasMaxLength(30);
+        builder.Ignore(o => o.InviteLifetimeDays);
+        builder.Ignore(o => o.InviteDomains);
     }
 }

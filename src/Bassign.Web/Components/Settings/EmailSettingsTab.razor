@@ -1,0 +1,165 @@
+@using System.Security.Claims
+@using Bassign.Application.Common.Email
+@using Bassign.Application.Settings
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+
+@if (_states is null || _status is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <section class="ba-card pa-5" aria-labelledby="email-h">
+                <h2 class="ba-section-label" id="email-h">Email</h2>
+                <p class="ba-muted ba-lead">Used for invites, and for notifications to anyone who hasn't linked WhatsApp.</p>
+
+                <AdminSettingField State="@(S("Email:Provider"))" Label="Send email using" ChoiceLabels="ProviderLabels" OnChange="Track" />
+
+                @if (Provider == "pickup")
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">Development: emails are saved as .eml files in %LOCALAPPDATA%\Bassign\mail instead of being sent.</MudAlert>
+                }
+
+                @switch (Provider)
+                {
+                    case "smtp":
+                        <AdminSettingField State="@(S("Email:Smtp:Host"))" Label="SMTP server" HelpText="e.g. smtp.office365.com or mail.yourdomain.co.zw" OnChange="Track" />
+                        <MudGrid Spacing="2">
+                            <MudItem xs="6"><AdminSettingField State="@(S("Email:Smtp:Port"))" Label="Port" HelpText="587 (STARTTLS) or 465 (SSL)" OnChange="Track" /></MudItem>
+                            <MudItem xs="6"><AdminSettingField State="@(S("Email:Smtp:Security"))" Label="Security" ChoiceLabels="SecurityLabels" OnChange="Track" /></MudItem>
+                        </MudGrid>
+                        <AdminSettingField State="@(S("Email:Smtp:Username"))" Label="Username" HelpText="Usually the full mailbox address" OnChange="Track" />
+                        <AdminSettingField State="@(S("Email:Smtp:Password"))" Label="Password" OnChange="Track" />
+                        <AdminSettingField State="@(S("Email:FromAddress"))" Label="From address" OnChange="Track" />
+                        break;
+                    case "gmail":
+                        <AdminSettingField State="@(S("Email:FromAddress"))" Label="Gmail address" HelpText="Mail is sent from this account" OnChange="Track" />
+                        <AdminSettingField State="@(S("Email:Smtp:Password"))" Label="App password" HelpText="16 characters from Google Account → Security → App passwords" OnChange="Track" />
+                        break;
+                    case "m365":
+                        <AdminSettingField State="@(S("Email:Graph:TenantId"))" Label="Tenant ID" OnChange="Track" />
+                        <AdminSettingField State="@(S("Email:Graph:ClientId"))" Label="Client (application) ID" OnChange="Track" />
+                        <AdminSettingField State="@(S("Email:Graph:ClientSecret"))" Label="Client secret" HelpText="Secrets expire — note the date in Azure" OnChange="Track" />
+                        <AdminSettingField State="@(S("Email:Graph:Sender"))" Label="Send as mailbox" HelpText="e.g. tasks@yourdomain.co.zw" OnChange="Track" />
+                        break;
+                    case "sendgrid":
+                        <AdminSettingField State="@(S("Email:ApiKey"))" Label="SendGrid API key" OnChange="Track" />
+                        <AdminSettingField State="@(S("Email:FromAddress"))" Label="From address" HelpText="Must be a verified sender in SendGrid" OnChange="Track" />
+                        break;
+                }
+
+                @if (Provider is not ("none" or "" or "pickup"))
+                {
+                    <AdminSettingField State="@(S("Email:FromName"))" Label="From name" HelpText="e.g. Minted Moments Tasks" OnChange="Track" />
+                }
+
+                @if (_status.Enabled && !_status.Ready && _pending.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Email is off until these are filled in: @string.Join(", ", _status.Missing).</MudAlert>
+                }
+
+                <div class="d-flex flex-wrap gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _pending.Count == 0)" OnClick="Save">Save</MudButton>
+                    @if (_pending.Count > 0)
+                    {
+                        <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="Load">Discard changes</MudButton>
+                    }
+                </div>
+            </section>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <section class="ba-card pa-5 mb-3" aria-labelledby="email-test-h">
+                <h2 class="ba-section-label" id="email-test-h">Send a test</h2>
+                <p class="ba-muted ba-lead">Uses the saved settings. Save first if you changed anything.</p>
+                <form @onsubmit="SendTest" class="d-flex gap-2 align-start">
+                    <MudTextField @bind-Value="_testTo" Label="Send to" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Email" />
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Class="mt-1" Disabled="@(_busy || !_status.Ready || _pending.Count > 0)">Send test</MudButton>
+                </form>
+                @if (_testResult is not null)
+                {
+                    <MudAlert Severity="@(_testOk ? Severity.Success : Severity.Error)" Dense="true" Class="mt-2">@_testResult</MudAlert>
+                }
+            </section>
+            <section class="ba-card pa-5" aria-labelledby="email-help-h">
+                <h2 class="ba-section-label" id="email-help-h">Which should I choose?</h2>
+                <ul class="ba-help">
+                    <li><strong>SMTP</strong> — if your organisation already has email (Microsoft 365, Google Workspace or your web host). Sends from your own domain.</li>
+                    <li><strong>Gmail</strong> — a single Gmail account. Turn on 2-Step Verification, then create an app password. Limit: about 500 emails a day.</li>
+                    <li><strong>Microsoft 365</strong> — when SMTP sign-in is switched off in your tenant. Your IT admin registers an app in Azure with the <em>Mail.Send</em> application permission and gives you the IDs and a secret.</li>
+                    <li><strong>SendGrid</strong> — a dedicated email service with strong delivery. Needs a SendGrid account and a verified sender.</li>
+                </ul>
+            </section>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private static readonly IReadOnlyDictionary<string, string> ProviderLabels = new Dictionary<string, string>
+    {
+        ["none"] = "Off", ["smtp"] = "SMTP (your organisation's mail server)", ["gmail"] = "Gmail",
+        ["m365"] = "Microsoft 365", ["sendgrid"] = "SendGrid"
+    };
+    private static readonly IReadOnlyDictionary<string, string> SecurityLabels = new Dictionary<string, string>
+    {
+        ["starttls"] = "STARTTLS", ["ssl"] = "SSL/TLS", ["none"] = "None (internal relay only)"
+    };
+
+    private IReadOnlyList<SettingState>? _states;
+    private EmailSetupStatus? _status;
+    private readonly Dictionary<string, SettingChange> _pending = new(StringComparer.OrdinalIgnoreCase);
+    private string _testTo = "";
+    private string? _testResult;
+    private bool _busy, _testOk;
+
+    private SettingState S(string key) => _states!.First(s => string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    private string Provider =>
+        (_pending.TryGetValue("Email:Provider", out var p) ? p.Value : S("Email:Provider").Value)?.ToLowerInvariant() ?? "none";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+            _testTo = (await AuthState).User.FindFirstValue(ClaimTypes.Email) ?? "";
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _pending.Clear();
+        _states = await Sender.Send(new GetAdminSettingsQuery("Email"));
+        _status = await Sender.Send(new GetEmailStatusQuery());
+    }
+
+    private void Track(KeyValuePair<string, SettingChange> change) => _pending[change.Key] = change.Value;
+
+    private async Task Save()
+    {
+        _busy = true;
+        var result = await Sender.TrySend(new SaveAdminSettingsCommand(new Dictionary<string, SettingChange>(_pending)));
+        _busy = false;
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error.Message, Severity.Error);
+            return;
+        }
+        Snackbar.Add("Email settings saved.", Severity.Success);
+        _states = null;
+        await Load();
+    }
+
+    private async Task SendTest()
+    {
+        _busy = true;
+        _testResult = null;
+        var result = await Sender.TrySend(new SendTestEmailCommand(_testTo.Trim()));
+        _busy = false;
+        _testOk = result.IsSuccess;
+        _testResult = result.IsSuccess ? $"Sent to {_testTo.Trim()}. Check the inbox (and spam)." : result.Error.Message;
+    }
+}

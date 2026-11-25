@@ -15,6 +15,8 @@ public sealed class WhatsAppChannel(
 
     public async Task<DeliveryResult> DeliverAsync(PendingNotification notification, NotificationMessage message, CancellationToken cancellationToken)
     {
+        if (!settings.IsReady)
+            return DeliveryResult.NotReachable("WhatsApp is off or not fully set up.");   // → email
         var binding = await bindings.GetByUserIdAsync(notification.UserId, cancellationToken);
         if (binding is not { Verified: true, PhoneE164: { } phone })
             return DeliveryResult.NotReachable("No verified WhatsApp number.");

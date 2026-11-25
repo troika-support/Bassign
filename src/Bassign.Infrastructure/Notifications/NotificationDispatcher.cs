@@ -1,5 +1,6 @@
 using Bassign.Application.Notifications;
-using Bassign.Domain.Organizations;
+using Bassign.Application.Organizations;
+using Bassign.Application.Organizations.Calendar;
 using Bassign.Infrastructure.Persistence;
 using Bassign.Infrastructure.Persistence.Messaging;
 using Microsoft.EntityFrameworkCore;
@@ -9,12 +10,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Bassign.Infrastructure.Notifications;
 
-/// <summary>One pass over the outbox: respect quiet hours, build the message from CURRENT data (a finished
+/// <summary>One pass over the outbox: respect quiet hours and the work calendar, build the message from CURRENT data (a finished
 /// task's reminder becomes a no-op), then try each channel in order; retry transient failures with
 /// exponential back-off (30s → 1h, 8 attempts). Saves after every notification so a crash never
 /// re-sends ones already delivered.</summary>
 public sealed class NotificationDispatcher(
     AppDbContext db,
+    IOrganizationRepository organization,
     IEnumerable<INotificationChannel> channels,
     NotificationMessageBuilder builder,
     TimeProvider clock,
@@ -33,16 +35,15 @@ public sealed class NotificationDispatcher(
             .ToListAsync(cancellationToken);
         if (due.Count == 0) return 0;
 
-        var org = await db.OrganizationSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken) ?? OrganizationSettings.CreateDefault();
-        var zone = NotificationSchedule.Zone(org.TimeZoneId);
-        var quiet = NotificationSchedule.IsQuiet(now, zone, org.QuietStartHour, org.QuietEndHour);
+        var calendar = await WorkCalendar.LoadAsync(organization, now, cancellationToken);
 
         foreach (var item in due)
         {
-            // Spec §3.C.5: nothing proactive in quiet hours except escalations to managers. Wait, don't drop.
-            if (quiet && !NotificationKinds.AllowedInQuietHours(item.Kind))
+            // Spec §3.C.5 + decision #13: in quiet hours, outside working time and on holidays only escalations
+            // go out. Wait, don't drop. (No slot within the horizon = rules that never allow it: send now.)
+            if (!calendar.CanSend(item.Kind, now) && calendar.NextSendTime(item.Kind, now) is { } sendAt)
             {
-                item.NextAttemptAt = NotificationSchedule.QuietEndsAt(now, zone, org.QuietEndHour);
+                item.NextAttemptAt = sendAt;
                 await db.SaveChangesAsync(cancellationToken);
                 continue;
             }

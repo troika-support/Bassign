@@ -19,6 +19,11 @@ public interface IWhatsAppLog
     void RecordInbound(WhatsAppInbound message);
     Task<int> CountInboundSinceAsync(string phoneE164, DateTimeOffset since, string textPrefix, CancellationToken cancellationToken = default);
     void RecordOutbound(WhatsAppOutbound message, string providerMessageId, DateTimeOffset at);
+
+    /// <summary>The buttons / list rows of the last message we sent this number (newest first lookup), so a reply
+    /// of "1" or "Accept" can be matched when the provider can't carry button ids (Twilio, typed replies).</summary>
+    Task<IReadOnlyList<WaButton>> LastOutboundActionsAsync(string phoneE164, DateTimeOffset since, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<WaButton>>([]);
     Task UpdateStatusAsync(string providerMessageId, string status, CancellationToken cancellationToken = default);
 }
 
@@ -39,4 +44,10 @@ public interface IWhatsAppSettings
 
     /// <summary>True in development: messages go to the built-in simulator, not a real provider.</summary>
     bool IsSimulator { get; }
+
+    /// <summary>"none", "360dialog", "meta", "twilio" or "simulator".</summary>
+    string Provider => IsSimulator ? "simulator" : "none";
+    /// <summary>A provider is chosen and fully configured.</summary>
+    bool IsReady => BusinessNumberE164 is not null;
+    IReadOnlyList<string> Missing => [];
 }

@@ -27,8 +27,15 @@ public sealed class TaskStore : ITaskRepository
 
 public sealed class OrgStore(OrganizationSettings org) : IOrganizationRepository
 {
+    public List<OrgClosure> Closures { get; } = [];
     public Task<OrganizationSettings?> FindAsync(CancellationToken cancellationToken = default) => Task.FromResult<OrganizationSettings?>(org);
     public void Add(OrganizationSettings settings) { }
+    public Task<IReadOnlyList<OrgClosure>> ListClosuresAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<OrgClosure>>(Closures.Where(c => c.Date >= from && c.Date <= to).OrderBy(c => c.Date).ToList());
+    public Task<OrgClosure?> FindClosureAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Closures.FirstOrDefault(c => c.Id == id));
+    public void AddClosure(OrgClosure closure) => Closures.Add(closure);
+    public void RemoveClosure(OrgClosure closure) => Closures.Remove(closure);
 }
 
 public sealed class People : IUserDirectory

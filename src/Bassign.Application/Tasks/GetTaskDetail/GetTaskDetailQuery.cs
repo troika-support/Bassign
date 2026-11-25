@@ -1,6 +1,7 @@
 using Bassign.Application.Common.Auditing;
 using Bassign.Application.Common.Directory;
 using Bassign.Application.Tasks.Contracts;
+using Bassign.Application.Tasks.Settings;
 using Bassign.Domain.Common;
 using Mediator;
 
@@ -13,7 +14,7 @@ public sealed record TaskDetailVm(
 
 public sealed record ActivityItem(string Action, string ActorName, DateTimeOffset At);
 
-public sealed class GetTaskDetailHandler(ITaskRepository tasks, IUserDirectory users, IAuditTrail audit)
+public sealed class GetTaskDetailHandler(ITaskRepository tasks, IUserDirectory users, IAuditTrail audit, ITaskCategoryRepository categories)
     : IRequestHandler<GetTaskDetailQuery, Result<TaskDetailVm>>
 {
     public async ValueTask<Result<TaskDetailVm>> Handle(GetTaskDetailQuery request, CancellationToken cancellationToken)
@@ -42,8 +43,10 @@ public sealed class GetTaskDetailHandler(ITaskRepository tasks, IUserDirectory u
             .Select(r => new ActivityItem(r.Action, NameOf(r.ActorId), r.At))
             .ToList();
 
+        var category = task.CategoryId is { } cid ? (await categories.GetAsync(cid, cancellationToken))?.Name : null;
+
         return new TaskDetailVm(
-            task.ToDto(),
+            task.ToDto(category),
             task.AssigneeId is { } id ? NameOf(id) : null,
             NameOf(task.CreatedById),
             activity);

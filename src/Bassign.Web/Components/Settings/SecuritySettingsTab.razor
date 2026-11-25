@@ -1,0 +1,111 @@
+@using Bassign.Application.Organizations.Security
+@using Bassign.Application.Settings
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+
+@if (_form is null || _states is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <section class="ba-card pa-5 mb-3" aria-labelledby="inv-h">
+                <h2 class="ba-section-label" id="inv-h">Invites</h2>
+                <MudSelect T="int" @bind-Value="_form.InviteLifetimeDays" Label="Invite links expire after" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var d in InviteDays) { <MudSelectItem T="int" Value="d">@(d == 1 ? "1 day" : $"{d} days")</MudSelectItem> }
+                </MudSelect>
+                <MudTextField T="string" @bind-Value="_form.Domains" Label="Only invite these email domains (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3"
+                              Placeholder="e.g. mintedmoments.co.zw, gmail.com" MaxLength="500"
+                              HelperText="Separate with commas. Leave empty to allow any address. Existing members aren't affected." />
+            </section>
+
+            <section class="ba-card pa-5" aria-labelledby="sess-h">
+                <h2 class="ba-section-label" id="sess-h">Signing in</h2>
+                <AdminSettingField State="@(S("Auth:WebSessionHours"))" Label="Website: sign out after this many hours without use (1 – 72)"
+                                   HelpText="Recommended: 8. Applies from each person's next sign-in." OnChange="Track" />
+                <AdminSettingField State="@(S("Auth:RefreshTokenDays"))" Label="Phone app: stay signed in for this many days unused (1 – 90)"
+                                   HelpText="Recommended: 30. Shorter is safer if phones are shared or lost." OnChange="Track" />
+                <p class="ba-muted" style="margin:8px 0 0;">Deactivating someone on the Team page signs them out everywhere within minutes, whatever these are set to.</p>
+            </section>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <section class="ba-card pa-5 mb-3" aria-labelledby="ret-h">
+                <h2 class="ba-section-label" id="ret-h">Keeping data</h2>
+                <p class="ba-muted ba-lead">Older records are deleted automatically every night. These periods appear in the privacy notice staff see. Check them with whoever handles data protection for you.</p>
+                <AdminSettingField State="@(S("Retention:WhatsAppMessageDays"))" Label="WhatsApp messages — days (7 – 730)" HelpText="Recommended: 90" OnChange="Track" />
+                <AdminSettingField State="@(S("Retention:NotificationDays"))" Label="Sent notifications — days (7 – 730)" HelpText="Recommended: 90" OnChange="Track" />
+                <AdminSettingField State="@(S("Retention:ProofPhotoDays"))" Label="Proof photos, after the task is done — days (30 – 3650)" HelpText="Recommended: 365" OnChange="Track" />
+                <AdminSettingField State="@(S("Retention:InviteDays"))" Label="Old invites — days (7 – 365)" HelpText="Recommended: 90" OnChange="Track" />
+                <AdminSettingField State="@(S("Retention:AiUsageDays"))" Label="AI usage records — days (30 – 1095)" HelpText="Recommended: 365" OnChange="Track" />
+                <AdminSettingField State="@(S("Retention:AuditDays"))" Label="Audit trail — days (365 – 3650)" HelpText="Recommended: 2555 (7 years)" OnChange="Track" />
+            </section>
+
+            <section class="ba-card pa-5" aria-labelledby="dpo-h">
+                <h2 class="ba-section-label" id="dpo-h">Privacy contact</h2>
+                <p class="ba-muted ba-lead">Shown on the <a class="ba-link" href="/privacy" target="_blank">privacy notice</a> as who staff contact about their personal information — usually your data protection officer.</p>
+                <MudTextField T="string" @bind-Value="_form.ContactName" Label="Name or role" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="100" Placeholder="e.g. Data Protection Officer" />
+                <MudTextField T="string" @bind-Value="_form.ContactEmail" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="256" InputType="InputType.Email" Class="mt-2" />
+                <MudTextField T="string" @bind-Value="_form.ContactPhone" Label="Phone (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="30" InputType="InputType.Telephone" Class="mt-2" />
+            </section>
+        </MudItem>
+    </MudGrid>
+
+    <div class="d-flex gap-2 mt-4">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Save">Save</MudButton>
+    </div>
+}
+
+@code {
+    private sealed class Form
+    {
+        public int InviteLifetimeDays { get; set; }
+        public string? Domains { get; set; }
+        public string? ContactName { get; set; }
+        public string? ContactEmail { get; set; }
+        public string? ContactPhone { get; set; }
+    }
+
+    private static readonly int[] InviteDays = [1, 3, 7, 14, 30];
+
+    private Form? _form;
+    private List<SettingState>? _states;
+    private readonly Dictionary<string, SettingChange> _pending = new(StringComparer.OrdinalIgnoreCase);
+    private bool _busy;
+
+    private SettingState S(string key) => _states!.First(s => string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
+    private void Track(KeyValuePair<string, SettingChange> change) => _pending[change.Key] = change.Value;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _pending.Clear();
+        var vm = await Sender.Send(new GetSecuritySettingsQuery());
+        _form = new Form
+        {
+            InviteLifetimeDays = vm.InviteLifetimeDays, Domains = string.Join(", ", vm.AllowedInviteDomains),
+            ContactName = vm.PrivacyContactName, ContactEmail = vm.PrivacyContactEmail, ContactPhone = vm.PrivacyContactPhone
+        };
+        _states = [.. await Sender.Send(new GetAdminSettingsQuery("Auth")), .. await Sender.Send(new GetAdminSettingsQuery("Retention"))];
+    }
+
+    private async Task Save()
+    {
+        if (_form is null) return;
+        _busy = true;
+        var org = await Sender.TrySend(new SaveSecuritySettingsCommand(new SecuritySettingsVm(
+            _form.InviteLifetimeDays, (_form.Domains ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            _form.ContactName, _form.ContactEmail, _form.ContactPhone)));
+        var admin = org.IsSuccess && _pending.Count > 0
+            ? await Sender.TrySend(new SaveAdminSettingsCommand(new Dictionary<string, SettingChange>(_pending)))
+            : org;
+        _busy = false;
+
+        var error = !org.IsSuccess ? org.Error.Message : !admin.IsSuccess ? admin.Error.Message : null;
+        Snackbar.Add(error ?? "Security & privacy settings saved.", error is null ? Severity.Success : Severity.Error);
+        if (error is null) { _states = null; await Load(); }
+    }
+}

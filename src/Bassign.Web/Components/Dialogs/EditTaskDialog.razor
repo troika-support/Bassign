@@ -1,4 +1,5 @@
 @using Bassign.Application.Tasks.UpdateTask
+@using Bassign.Application.Tasks.Settings
 @inject IUiSender Sender
 @inject OrgClock Clock
 
@@ -12,9 +13,18 @@
             </div>
             <div style="flex:1; min-width:140px;">
                 <MudTimePicker Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Time="_time" Label="Time (optional)" AmPm="true" Editable="true" Clearable="true"
-                               Disabled="@(_due is null)" HelperText="Blank = end of the day" />
+                               Disabled="@(_due is null)" HelperText="@DueHelp" />
             </div>
         </div>
+        @if (_categories.Count > 0)
+        {
+            <MudSelect T="Guid?" @bind-Value="_categoryId" Label="Category (optional)" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="mt-3">
+                @foreach (var c in _categories)
+                {
+                    <MudSelectItem T="Guid?" Value="@c.Id">@(c.IsArchived ? $"{c.Name} (archived)" : c.Name)</MudSelectItem>
+                }
+            </MudSelect>
+        }
         @if (_error is not null)
         {
             <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
@@ -34,6 +44,11 @@
     private string? _detail;
     private DateTime? _due;
     private TimeSpan? _time;
+    private Guid? _categoryId;
+    private TaskDefaultsVm? _defaults;
+    private List<TaskCategoryVm> _categories = [];
+
+    private string DueHelp => _defaults is { } d ? $"Blank = end of the working day ({d.DefaultDueTime:hh\\:mm})" : "Blank = end of the working day";
     private string? _error;
     private bool _busy;
 
@@ -41,6 +56,10 @@
     {
         _title = Task.Title;
         _detail = Task.Detail;
+        _categoryId = Task.CategoryId;
+        _defaults = await Sender.Send(new GetTaskDefaultsQuery(IncludeArchived: true));
+        // Active categories, plus this task's own if it has since been archived.
+        _categories = _defaults.Categories.Where(c => !c.IsArchived || c.Id == Task.CategoryId).ToList();
         if (Task.DueDate is { } due)
         {
             var zoned = OrgClock.InZone(due, await Clock.ZoneAsync());
@@ -53,8 +72,8 @@
     {
         _busy = true;
         _error = null;
-        DateTimeOffset? due = _due is { } d ? OrgClock.FromPicker(d, _time, await Clock.ZoneAsync()) : null;
-        var r = await Sender.TrySend(new UpdateTaskCommand(Task.Id, _title, _detail, due));
+        DateTimeOffset? due = _due is { } d ? OrgClock.FromPicker(d, _time, await Clock.ZoneAsync(), _defaults?.DefaultDueTime) : null;
+        var r = await Sender.TrySend(new UpdateTaskCommand(Task.Id, _title, _detail, due, _categoryId));
         if (r.IsSuccess) MudDialog.Close(DialogResult.Ok(true));
         else { _error = r.Error.Message; _busy = false; }
     }

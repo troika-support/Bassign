@@ -18,6 +18,8 @@ public sealed class WhatsAppBinding
     public string? LinkCodeHash { get; private set; }
     public DateTimeOffset? LinkCodeExpiresAt { get; private set; }
     public Guid? AwaitingProofForTaskId { get; private set; }
+    /// <summary>Set after "Decline → Other": the next text message is the reason.</summary>
+    public Guid? AwaitingDeclineReasonForTaskId { get; private set; }
 
     private WhatsAppBinding() { }   // EF
 
@@ -49,6 +51,7 @@ public sealed class WhatsAppBinding
         LinkCodeHash = null;          // single use
         LinkCodeExpiresAt = null;
         AwaitingProofForTaskId = null;
+        AwaitingDeclineReasonForTaskId = null;
     }
 
     public void Unlink()
@@ -59,8 +62,11 @@ public sealed class WhatsAppBinding
         LinkCodeHash = null;
         LinkCodeExpiresAt = null;
         AwaitingProofForTaskId = null;
+        AwaitingDeclineReasonForTaskId = null;
     }
 
     public void AwaitProofFor(Guid taskId) => AwaitingProofForTaskId = taskId;
     public void ClearAwaitingProof() => AwaitingProofForTaskId = null;
+    public void AwaitDeclineReasonFor(Guid taskId) => AwaitingDeclineReasonForTaskId = taskId;
+    public void ClearAwaitingDeclineReason() => AwaitingDeclineReasonForTaskId = null;
 }

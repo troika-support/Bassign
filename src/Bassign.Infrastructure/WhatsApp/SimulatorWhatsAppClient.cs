@@ -7,8 +7,10 @@ namespace Bassign.Infrastructure.WhatsApp;
 
 /// <summary>Development provider: "sends" by returning an id — the message is already in the conversation
 /// log, which the web simulator renders as a phone. Inbound media comes from <see cref="SimulatorMediaStore"/>.</summary>
-public sealed class SimulatorWhatsAppClient(SimulatorMediaStore media) : IWhatsAppClient
+public sealed class SimulatorWhatsAppClient(SimulatorMediaStore media) : IWhatsAppTransport
 {
+    public bool Handles(string provider) => provider == "simulator";
+
     public Task<string> SendAsync(WhatsAppOutbound message, CancellationToken cancellationToken = default) =>
         Task.FromResult($"sim.{Guid.NewGuid():N}");
 

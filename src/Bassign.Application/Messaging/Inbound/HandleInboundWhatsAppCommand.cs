@@ -57,13 +57,28 @@ public sealed partial class HandleInboundWhatsAppHandler(
         if (binding is null)
             return [Enrollment(msg.FromE164, org)];
 
+        // "1" or "Accept" typed (or a Twilio template button) → the matching option of the last menu we sent.
+        if (msg.ReplyId is null && msg.Text is { } typed && await MatchMenuAsync(msg.FromE164, typed, cancellationToken) is { } chosen)
+            msg = msg with { ReplyId = chosen };
+
         IReadOnlyList<WhatsAppOutbound> replies;
-        if (WhatsAppReplyIds.TryParse(msg.ReplyId, out var action, out var taskId))
-            replies = await ActAsync(binding, action, taskId, msg.FromE164, org, cancellationToken);
+        if (WhatsAppReplyIds.TryParse(msg.ReplyId, out var action, out var taskId, out var arg))
+        {
+            binding.ClearAwaitingDeclineReason();   // they tapped something else instead of typing a reason
+            replies = await ActAsync(binding, action, taskId, arg, msg.FromE164, org, cancellationToken);
+        }
         else if (msg.Type == "image")
             replies = [await ProofPhotoAsync(binding, msg, cancellationToken)];
         else if (msg.Text is { } words && ListWords.Contains(words.Trim().ToLowerInvariant()))
+        {
+            binding.ClearAwaitingDeclineReason();
             replies = await MyTasksAsync(binding.UserId, msg.FromE164, org, cancellationToken);
+        }
+        else if (binding.AwaitingDeclineReasonForTaskId is { } declining && msg.Text is { } why && !string.IsNullOrWhiteSpace(why))
+        {
+            binding.ClearAwaitingDeclineReason();
+            replies = await DeclineAsync(binding, declining, why.Trim(), msg.FromE164, cancellationToken);
+        }
         else
             replies = [Help(msg.FromE164)];
 
@@ -94,6 +109,17 @@ public sealed partial class HandleInboundWhatsAppHandler(
             $"✅ Linked! Hi {name.Split(' ')[0]} — your {org.Name} tasks will come here. Reply TASKS any time to see them.");
     }
 
+    private async Task<string?> MatchMenuAsync(string phone, string typed, CancellationToken ct)
+    {
+        var text = typed.Trim();
+        if (text.Length is 0 or > 40) return null;
+        var menu = await log.LastOutboundActionsAsync(phone, clock.GetUtcNow() - WhatsAppComposer.Window, ct);
+        if (menu.Count == 0) return null;
+        if (int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n))
+            return n >= 1 && n <= menu.Count ? menu[n - 1].Id : null;
+        return menu.FirstOrDefault(m => string.Equals(m.Title, text, StringComparison.OrdinalIgnoreCase))?.Id;
+    }
+
     private static WaText Enrollment(string phone, OrganizationSettings org) =>
         new(phone, $"Hi! This number isn't linked to {org.Name} on Bassign yet. Open Bassign → Profile → Link WhatsApp, then send the code it shows you here.");
 
@@ -101,7 +127,7 @@ public sealed partial class HandleInboundWhatsAppHandler(
         new(phone, "Reply TASKS to see your tasks. Use the buttons on a task to accept, decline or mark it done — and send a photo when a task asks for one.");
 
     private async Task<IReadOnlyList<WhatsAppOutbound>> ActAsync(
-        WhatsAppBinding binding, string action, Guid taskId, string phone, OrganizationSettings org, CancellationToken ct)
+        WhatsAppBinding binding, string action, Guid taskId, string? arg, string phone, OrganizationSettings org, CancellationToken ct)
     {
         var task = await tasks.GetByIdAsync(taskId, ct);
         if (task is null || task.AssigneeId != binding.UserId)
@@ -129,8 +155,24 @@ public sealed partial class HandleInboundWhatsAppHandler(
 
             case WhatsAppReplyIds.Decline:
             {
-                var result = await runAs.SendAsync(binding.UserId, new DeclineTaskCommand(task.Id, "Declined on WhatsApp"), ct);
-                return [new WaText(phone, result.IsSuccess ? "Declined — your manager will reassign it." : result.Error.Message)];
+                if (task.Status != TaskStatus.Todo)
+                    return [new WaText(phone, "Only a new task can be declined.")];
+                if (arg == DeclineReasons.Other)
+                {
+                    binding.AwaitDeclineReasonFor(task.Id);
+                    return [new WaText(phone, $"What's the reason for declining \"{task.Title}\"? Reply in a few words.")];
+                }
+                if (DeclineReasons.LabelFor(arg) is { } reason)
+                    return await DeclineAsync(binding, task.Id, reason, phone, ct);
+                if (!org.DeclineReasonRequired)
+                    return await DeclineAsync(binding, task.Id, null, phone, ct);
+
+                // Decision #20: one more tap — pick why, so the manager can reassign well.
+                var rows = DeclineReasons.All
+                    .Select(r => new WaListRow(WhatsAppReplyIds.DeclineWith(task.Id, r.Code), r.Label,
+                        r.Code == DeclineReasons.Other ? "Type your own reason" : null))
+                    .ToList();
+                return [new WaList(phone, $"Why are you declining \"{task.Title}\"?", "Pick a reason", rows)];
             }
 
             case WhatsAppReplyIds.Done:
@@ -147,6 +189,12 @@ public sealed partial class HandleInboundWhatsAppHandler(
             default:
                 return [Help(phone)];
         }
+    }
+
+    private async Task<IReadOnlyList<WhatsAppOutbound>> DeclineAsync(WhatsAppBinding binding, Guid taskId, string? reason, string phone, CancellationToken ct)
+    {
+        var result = await runAs.SendAsync(binding.UserId, new DeclineTaskCommand(taskId, reason), ct);
+        return [new WaText(phone, result.IsSuccess ? "Declined — your manager will reassign it." : result.Error.Message)];
     }
 
     private async Task<WhatsAppOutbound> ProofPhotoAsync(WhatsAppBinding binding, WhatsAppInbound msg, CancellationToken ct)

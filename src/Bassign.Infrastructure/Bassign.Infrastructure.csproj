@@ -12,6 +12,7 @@
     <PackageReference Include="Hangfire.AspNetCore" />
     <!-- Hangfire.Core pulls Newtonsoft.Json 11 (GHSA-5crp-9r3c-p9vr); pin the patched version. -->
     <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="MailKit" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <!-- Pin the patched crypto package (transitive via SqlClient) to clear NU1902/NU1903. -->

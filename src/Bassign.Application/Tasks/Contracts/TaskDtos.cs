@@ -14,7 +14,10 @@ public sealed record TaskDto(
     bool RequiresProofPhoto,
     string? ProofPhotoRef,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    Guid? CategoryId = null,
+    string? CategoryName = null,
+    string? DeclineReason = null);
 
 /// <summary>Lighter row for the task list.</summary>
 public sealed record TaskListItemDto(
@@ -24,14 +27,17 @@ public sealed record TaskListItemDto(
     string? AssigneeId,
     string? AssigneeName,
     DateTimeOffset? DueDate,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    Guid? CategoryId = null,
+    string? CategoryName = null);
 
 public static class TaskMappings
 {
-    public static TaskDto ToDto(this TaskItem t) => new(
+    public static TaskDto ToDto(this TaskItem t, string? categoryName = null) => new(
         t.Id, t.Title, t.Detail, t.DueDate, t.Status.ToString(),
-        t.AssigneeId, t.CreatedById, t.RequiresProofPhoto, t.ProofPhotoRef, t.CreatedAt, t.CompletedAt);
+        t.AssigneeId, t.CreatedById, t.RequiresProofPhoto, t.ProofPhotoRef, t.CreatedAt, t.CompletedAt,
+        t.CategoryId, categoryName, t.DeclineReason);
 
-    public static TaskListItemDto ToListItem(this TaskItem t, string? assigneeName = null) => new(
-        t.Id, t.Title, t.Status.ToString(), t.AssigneeId, assigneeName, t.DueDate, t.CreatedAt);
+    public static TaskListItemDto ToListItem(this TaskItem t, string? assigneeName = null, string? categoryName = null) => new(
+        t.Id, t.Title, t.Status.ToString(), t.AssigneeId, assigneeName, t.DueDate, t.CreatedAt, t.CategoryId, categoryName);
 }

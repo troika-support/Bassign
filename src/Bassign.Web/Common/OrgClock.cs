@@ -24,10 +24,11 @@ public sealed class OrgClock(IUiSender sender)
         return _zone;
     }
 
-    /// <summary>A picked date (+ optional time) in the org's zone → an exact instant.</summary>
-    public static DateTimeOffset FromPicker(DateTime date, TimeSpan? time, TimeZoneInfo zone)
+    /// <summary>A picked date (+ optional time) in the org's zone → an exact instant. No time = <paramref name="defaultTime"/>
+    /// (the end of the working day, decision #20), else 23:59.</summary>
+    public static DateTimeOffset FromPicker(DateTime date, TimeSpan? time, TimeZoneInfo zone, TimeSpan? defaultTime = null)
     {
-        var local = DateTime.SpecifyKind(date.Date + (time ?? EndOfDay), DateTimeKind.Unspecified);
+        var local = DateTime.SpecifyKind(date.Date + (time ?? defaultTime ?? EndOfDay), DateTimeKind.Unspecified);
         return new DateTimeOffset(local, zone.GetUtcOffset(local));
     }
 

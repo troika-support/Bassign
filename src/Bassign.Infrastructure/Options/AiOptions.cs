@@ -1,9 +1,9 @@
 namespace Bassign.Infrastructure.Options;
 
 /// <summary>
-/// AI provider for this install (spec §3.F). The key is a secret: user-secrets in development
-/// (dotnet user-secrets set "Ai:ApiKey" "..." --project src/Bassign.Api — Web shares the same store),
-/// environment variable Ai__ApiKey on IIS. No key ⇒ AI is off and every feature falls back.
+/// AI provider for this install (spec §3.F). Admins can change it in Settings → AI (step 16b). On the server:
+/// <c>Default__Ai__ApiKey</c> = your key until the client enters their own; <c>Ai__ApiKey</c> = locked to your key.
+/// Development: dotnet user-secrets set "Ai:ApiKey" "..." --project src/Bassign.Api. No key ⇒ AI off, features fall back.
 /// </summary>
 public sealed class AiOptions
 {
@@ -26,6 +26,10 @@ public sealed class AiOptions
     public int TimeoutSeconds { get; set; } = 15;
     public int MaxInputChars { get; set; } = 6000;
     public int MaxOutputTokens { get; set; } = 400;
+
+    /// <summary>Admin switches (Settings → AI): each feature can be turned off on its own.</summary>
+    public bool SuggestionsEnabled { get; set; } = true;
+    public bool SummariesEnabled { get; set; } = true;
 
     /// <summary>Ask the provider for schema-constrained JSON. Turn off for models that reject it.</summary>
     public bool UseJsonSchema { get; set; } = true;

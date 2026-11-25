@@ -39,6 +39,9 @@ public class HandleInboundWhatsAppTests
     private sealed class Log : IWhatsAppLog
     {
         public int LinkAttempts { get; set; }
+        public List<WaButton> Menu { get; } = [];
+        public Task<IReadOnlyList<WaButton>> LastOutboundActionsAsync(string phoneE164, DateTimeOffset since, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<WaButton>>(Menu);
         public Task<DateTimeOffset?> LastInboundAtAsync(string phoneE164, CancellationToken cancellationToken = default) => Task.FromResult<DateTimeOffset?>(null);
         public void RecordInbound(WhatsAppInbound message) { }
         public Task<int> CountInboundSinceAsync(string phoneE164, DateTimeOffset since, string textPrefix, CancellationToken cancellationToken = default) => Task.FromResult(LinkAttempts);
@@ -92,6 +95,11 @@ public class HandleInboundWhatsAppTests
     {
         public Task<OrganizationSettings?> FindAsync(CancellationToken cancellationToken = default) => Task.FromResult<OrganizationSettings?>(null);
         public void Add(OrganizationSettings settings) { }
+        public Task<IReadOnlyList<OrgClosure>> ListClosuresAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<OrgClosure>>([]);
+        public Task<OrgClosure?> FindClosureAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult<OrgClosure?>(null);
+        public void AddClosure(OrgClosure closure) { }
+        public void RemoveClosure(OrgClosure closure) { }
     }
 
     private sealed class Users : IUserDirectory
@@ -193,15 +201,62 @@ public class HandleInboundWhatsAppTests
     }
 
     [Fact]
-    public async Task Decline_button_runs_DeclineTask()
+    public async Task Decline_button_asks_why_with_a_list_before_declining()
     {
         var sut = new Sut();
         sut.LinkedUser();
         var task = sut.TaskFor(UserId);
 
-        await sut.Receive(replyId: $"{WhatsAppReplyIds.Decline}:{task.Id}");
+        var replies = await sut.Receive(replyId: $"{WhatsAppReplyIds.Decline}:{task.Id}");
 
-        Assert.IsType<DeclineTaskCommand>(Assert.Single(sut.RunAs.Calls).Request);
+        Assert.Empty(sut.RunAs.Calls);   // nothing declined yet
+        var list = Assert.IsType<WaList>(Assert.Single(replies));
+        Assert.Equal(DeclineReasons.All.Count, list.Rows.Count);
+        Assert.Contains(list.Rows, r => r.Id == $"decline:{task.Id}:busy" && r.Title == "Too busy");
+        Assert.All(list.Rows, r => Assert.True(r.Title.Length <= 24));   // WhatsApp's row-title limit
+    }
+
+    [Fact]
+    public async Task Picking_a_reason_declines_with_its_label()
+    {
+        var sut = new Sut();
+        sut.LinkedUser();
+        var task = sut.TaskFor(UserId);
+
+        await sut.Receive(replyId: WhatsAppReplyIds.DeclineWith(task.Id, "area"));
+
+        Assert.Equal(new DeclineTaskCommand(task.Id, "Not my area"), Assert.Single(sut.RunAs.Calls).Request);
+    }
+
+    [Fact]
+    public async Task Other_waits_for_a_typed_reason()
+    {
+        var sut = new Sut();
+        var binding = sut.LinkedUser();
+        var task = sut.TaskFor(UserId);
+
+        var prompt = await sut.Receive(replyId: WhatsAppReplyIds.DeclineWith(task.Id, DeclineReasons.Other));
+        Assert.Contains("reason", Assert.IsType<WaText>(Assert.Single(prompt)).Body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(task.Id, binding.AwaitingDeclineReasonForTaskId);
+
+        await sut.Receive(text: "  On leave from Friday  ");
+
+        Assert.Equal(new DeclineTaskCommand(task.Id, "On leave from Friday"), Assert.Single(sut.RunAs.Calls).Request);
+        Assert.Null(binding.AwaitingDeclineReasonForTaskId);
+    }
+
+    [Fact]
+    public async Task Typing_tasks_while_a_reason_is_awaited_cancels_the_decline()
+    {
+        var sut = new Sut();
+        var binding = sut.LinkedUser();
+        var task = sut.TaskFor(UserId);
+        await sut.Receive(replyId: WhatsAppReplyIds.DeclineWith(task.Id, DeclineReasons.Other));
+
+        await sut.Receive(text: "TASKS");
+
+        Assert.Empty(sut.RunAs.Calls);
+        Assert.Null(binding.AwaitingDeclineReasonForTaskId);
     }
 
     [Fact]
@@ -273,5 +328,34 @@ public class HandleInboundWhatsAppTests
 
         Assert.Equal(2, list.Rows.Count);
         Assert.All(list.Rows, r => Assert.StartsWith($"{WhatsAppReplyIds.View}:", r.Id, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("accept")]
+    [InlineData(" Accept ")]
+    public async Task A_typed_number_or_word_picks_from_the_last_menu(string typed)
+    {
+        var sut = new Sut();
+        sut.LinkedUser();
+        var task = sut.TaskFor(UserId);
+        sut.Log.Menu.AddRange([new WaButton($"accept:{task.Id}", "Accept"), new WaButton($"decline:{task.Id}", "Decline")]);
+
+        await sut.Receive(text: typed);
+
+        Assert.Equal(new AcceptTaskCommand(task.Id), Assert.Single(sut.RunAs.Calls).Request);
+    }
+
+    [Fact]
+    public async Task A_number_outside_the_menu_does_nothing()
+    {
+        var sut = new Sut();
+        sut.LinkedUser();
+        var task = sut.TaskFor(UserId);
+        sut.Log.Menu.Add(new WaButton($"accept:{task.Id}", "Accept"));
+
+        await sut.Receive(text: "7");
+
+        Assert.Empty(sut.RunAs.Calls);
     }
 }

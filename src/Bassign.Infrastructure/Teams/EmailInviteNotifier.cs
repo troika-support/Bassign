@@ -12,12 +12,12 @@ namespace Bassign.Infrastructure.Teams;
 /// <summary>Emails the invite link. Never logs the token. A failed email doesn't undo the invite — the
 /// Team page still shows it, and it can be revoked and re-sent.</summary>
 public sealed class EmailInviteNotifier(
-    IEmailSender sender, IOrganizationRepository organization, IOptions<EmailOptions> options, ILogger<EmailInviteNotifier> logger) : IInviteNotifier
+    IEmailSender sender, IOrganizationRepository organization, IOptionsMonitor<EmailOptions> options, ILogger<EmailInviteNotifier> logger) : IInviteNotifier
 {
     public async Task InviteCreatedAsync(string email, string role, string token, DateTimeOffset expiresAt, CancellationToken cancellationToken = default)
     {
         var org = await organization.FindAsync(cancellationToken) ?? OrganizationSettings.CreateDefault();
-        var link = $"{options.Value.PublicBaseUrl.TrimEnd('/')}/invite/{Uri.EscapeDataString(token)}";
+        var link = $"{options.CurrentValue.PublicBaseUrl.TrimEnd('/')}/invite/{Uri.EscapeDataString(token)}";
         var (subject, html, text) = EmailTemplates.Invite(org.Name, role, link, expiresAt, org.AccentHex);
         try
         {

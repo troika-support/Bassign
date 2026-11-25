@@ -134,6 +134,17 @@ else
                         <div><dt>Completed</dt><dd>@FormatInstant(done)</dd></div>
                     }
                     <div>
+                        <dt>Category</dt>
+                        <dd>@(t.CategoryName ?? "None")</dd>
+                    </div>
+                    @if (t.Status == "Declined")
+                    {
+                        <div>
+                            <dt>Declined because</dt>
+                            <dd>@(t.DeclineReason ?? "No reason given")</dd>
+                        </div>
+                    }
+                    <div>
                         <dt>Proof photo</dt>
                         <dd>@(t.RequiresProofPhoto ? "Required to finish" : "Not required")</dd>
                     </div>

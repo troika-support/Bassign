@@ -15,7 +15,7 @@ namespace Bassign.Infrastructure.Ai;
 /// </summary>
 public sealed class ChatAiAssistant(
     AiClients clients,
-    IOptions<AiOptions> options,
+    IOptionsMonitor<AiOptions> options,
     IAiUsageMeter meter,
     TimeProvider clock,
     ILogger<ChatAiAssistant> logger) : ITaskAssignmentAssistant, ISummaryGenerator
@@ -24,10 +24,11 @@ public sealed class ChatAiAssistant(
 
     public async Task<AssignmentResult> SuggestAsync(AssignmentRequest request, CancellationToken cancellationToken = default)
     {
+        if (!options.CurrentValue.SuggestionsEnabled) return new AssignmentResult(AiOutcome.Disabled, Note: "AI suggestions are turned off.");
         if (clients.Chat is null) return new AssignmentResult(AiOutcome.Disabled, Note: "AI isn't configured.");
         if (request.Candidates.Count == 0) return AssignmentResult.NoMatch("No one to suggest.");
 
-        var o = options.Value;
+        var o = options.CurrentValue;
         var prompt = AssignmentPrompt.Build(request, o.MaxInputChars);
         var reply = await CompleteAsync("assign", AssignmentPrompt.SystemPrompt, prompt.UserMessage, json: true, maxTokens: 200, cancellationToken);
         if (reply.Text is null) return AssignmentResult.Unavailable(reply.Error ?? "AI unavailable.");
@@ -43,9 +44,9 @@ public sealed class ChatAiAssistant(
 
     public async Task<SummaryResult> SummarizeDigestAsync(DigestFacts facts, CancellationToken cancellationToken = default)
     {
-        if (clients.Chat is null) return new SummaryResult(AiOutcome.Disabled, null);
+        if (!options.CurrentValue.SummariesEnabled || clients.Chat is null) return new SummaryResult(AiOutcome.Disabled, null);
 
-        var o = options.Value;
+        var o = options.CurrentValue;
         var reply = await CompleteAsync("digest", DigestPrompt.SystemPrompt, DigestPrompt.Build(facts, o.MaxInputChars), json: false, maxTokens: o.MaxOutputTokens, cancellationToken);
         if (reply.Text is null) return new SummaryResult(AiOutcome.Unavailable, null);
 
@@ -59,7 +60,7 @@ public sealed class ChatAiAssistant(
 
     private async Task<Reply> CompleteAsync(string feature, string system, string user, bool json, int maxTokens, CancellationToken cancellationToken)
     {
-        var o = options.Value;
+        var o = options.CurrentValue;
         var chatOptions = new ChatOptions
         {
             MaxOutputTokens = Math.Min(maxTokens, o.MaxOutputTokens),

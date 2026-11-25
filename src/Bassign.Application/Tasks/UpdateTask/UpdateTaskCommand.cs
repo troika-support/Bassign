@@ -1,12 +1,14 @@
 using Bassign.Application.Common.Auditing;
 using Bassign.Application.Common.Persistence;
+using Bassign.Application.Tasks.Settings;
 using Bassign.Domain.Common;
 using FluentValidation;
 using Mediator;
 
 namespace Bassign.Application.Tasks.UpdateTask;
 
-public sealed record UpdateTaskCommand(Guid TaskId, string Title, string? Detail, DateTimeOffset? DueDate)
+/// <summary>CategoryId is the task's category after the edit (null = none).</summary>
+public sealed record UpdateTaskCommand(Guid TaskId, string Title, string? Detail, DateTimeOffset? DueDate, Guid? CategoryId)
     : IRequest<Result<Unit>>, IAuditableRequest
 {
     public string AuditAction => "task.update";
@@ -24,7 +26,7 @@ public sealed class UpdateTaskCommandValidator : AbstractValidator<UpdateTaskCom
     }
 }
 
-public sealed class UpdateTaskHandler(ITaskRepository tasks, IUnitOfWork uow, TimeProvider clock)
+public sealed class UpdateTaskHandler(ITaskRepository tasks, ITaskCategoryRepository categories, IUnitOfWork uow, TimeProvider clock)
     : IRequestHandler<UpdateTaskCommand, Result<Unit>>
 {
     public async ValueTask<Result<Unit>> Handle(UpdateTaskCommand request, CancellationToken cancellationToken)
@@ -33,7 +35,14 @@ public sealed class UpdateTaskHandler(ITaskRepository tasks, IUnitOfWork uow, Ti
         if (task is null)
             return new Error("task.not_found", "Task not found.");
 
-        try { task.UpdateDetails(request.Title, request.Detail, request.DueDate, clock.GetUtcNow()); }
+        if (await TaskSettingsErrors.CheckPickableAsync(categories, request.CategoryId, task.CategoryId, cancellationToken) is { } bad)
+            return bad;
+
+        try
+        {
+            task.UpdateDetails(request.Title, request.Detail, request.DueDate, clock.GetUtcNow());
+            task.ChangeCategory(request.CategoryId);
+        }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
             return new Error("task.invalid_state", ex.Message);

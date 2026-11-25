@@ -1,3 +1,4 @@
+using Bassign.Infrastructure.Settings;
 using Bassign.Infrastructure.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
 using Bassign.Infrastructure.Jobs;
@@ -26,6 +27,7 @@ using MudBlazor.Services;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddBassignAdminSettings();   // Admin-set values from the database: above appsettings, below env vars
 
 builder.Host.UseSerilog((context, loggerConfig) => loggerConfig
     .ReadFrom.Configuration(context.Configuration)
@@ -206,5 +208,11 @@ static async Task SignInAsync(HttpContext http, UserManager<ApplicationUser> use
     claims.AddRange((await users.GetRolesAsync(user)).Select(r => new Claim(ClaimTypes.Role, r)));
 
     var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-    await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+
+    // Session length is Admin-editable (Settings → Security & privacy), so it's read at sign-in rather than
+    // fixed in the cookie options. Sliding renewal keeps this span: signed out after N hours without use.
+    var hours = http.RequestServices.GetRequiredService<IConfiguration>().GetValue<int?>("Auth:WebSessionHours") is >= 1 and <= 72 and var h ? h : 8;
+    var now = DateTimeOffset.UtcNow;
+    await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity),
+        new AuthenticationProperties { IssuedUtc = now, ExpiresUtc = now.AddHours(hours) });
 }

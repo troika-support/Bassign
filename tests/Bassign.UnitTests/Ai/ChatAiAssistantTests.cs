@@ -10,10 +10,10 @@ public class ChatAiAssistantTests
     private static readonly AssignmentRequest Request = new("Fix the gate", null, null,
         [new AssignmentCandidate("u-1", "Tendai", 0, 0, [])]);
 
-    private static (ChatAiAssistant Sut, RecordingMeter Meter) Create(ScriptedChatClient? client, int timeoutSeconds = 15)
+    private static (ChatAiAssistant Sut, RecordingMeter Meter) Create(ScriptedChatClient? client, int timeoutSeconds = 15, AiOptions? custom = null)
     {
         var meter = new RecordingMeter();
-        var options = Microsoft.Extensions.Options.Options.Create(new AiOptions { TimeoutSeconds = timeoutSeconds });
+        var options = new TestOptionsMonitor<AiOptions>(custom ?? new AiOptions { TimeoutSeconds = timeoutSeconds });
         return (new ChatAiAssistant(new AiClients(client, null), options, meter, TimeProvider.System, NullLogger<ChatAiAssistant>.Instance), meter);
     }
 
@@ -80,5 +80,55 @@ public class ChatAiAssistantTests
 
         Assert.Equal(AiOutcome.Ok, result.Outcome);
         Assert.Equal("Two tasks are overdue. Chase Farai first.", result.Text);
+    }
+
+    [Fact]
+    public async Task Turning_suggestions_off_stops_ai_calls()
+    {
+        var client = new ScriptedChatClient("""{"candidate":"c1","confidence":0.9,"reasoning":"x"}""");
+        var (sut, _) = Create(client, custom: new AiOptions { SuggestionsEnabled = false });
+
+        var result = await sut.SuggestAsync(Request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AiOutcome.Disabled, result.Outcome);
+        Assert.Empty(client.Calls);
+    }
+
+    [Fact]
+    public async Task Turning_summaries_off_stops_ai_calls()
+    {
+        var client = new ScriptedChatClient("Summary");
+        var (sut, _) = Create(client, custom: new AiOptions { SummariesEnabled = false });
+
+        var result = await sut.SummarizeDigestAsync(new DigestFacts("Org", new DateOnly(2026, 11, 25), 1, 0, 0, 0, 0, []), TestContext.Current.CancellationToken);
+
+        Assert.Equal(AiOutcome.Disabled, result.Outcome);
+        Assert.Empty(client.Calls);
+    }
+
+    [Fact]
+    public async Task The_confidence_threshold_applies_without_a_restart()
+    {
+        var options = new TestOptionsMonitor<AiOptions>(new AiOptions { MinConfidence = 0.6 });
+        var sut = new ChatAiAssistant(new AiClients(new ScriptedChatClient("""{"candidate":"c1","confidence":0.7,"reasoning":"x"}"""), null),
+            options, new RecordingMeter(), TimeProvider.System, NullLogger<ChatAiAssistant>.Instance);
+
+        Assert.Equal(AiOutcome.Ok, (await sut.SuggestAsync(Request, TestContext.Current.CancellationToken)).Outcome);
+        options.Set(new AiOptions { MinConfidence = 0.8 });   // Admin raises the bar in Settings
+        Assert.Equal(AiOutcome.NoConfidentMatch, (await sut.SuggestAsync(Request, TestContext.Current.CancellationToken)).Outcome);
+    }
+
+    [Fact]
+    public void Ai_clients_follow_a_provider_change()
+    {
+        var options = new TestOptionsMonitor<AiOptions>(new AiOptions { Provider = "none" });
+        using var clients = new AiClients(options);
+        Assert.Null(clients.Chat);
+
+        options.Set(new AiOptions { Provider = "openai", Model = "llama3.2", BaseUrl = "http://localhost:11434/v1" });   // local Ollama: no key
+        Assert.NotNull(clients.Chat);
+
+        options.Set(new AiOptions { Provider = "none" });
+        Assert.Null(clients.Chat);
     }
 }

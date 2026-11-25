@@ -54,7 +54,7 @@ else
                    Pending="@current.Pending" RequiresProofPhoto="@current.RequiresProofPhoto" Notice="@current.Notice"
                    Busy="@_busy"
                    OnAccept="@(() => AcceptAsync(current))"
-                   OnDecline="@(() => DeclineAsync(current))"
+                   OnDecline="@(() => OpenDecline(current))"
                    OnComplete="@(() => CompleteAsync(current))" />
 
     @if (_tasks.Count > 1)
@@ -73,6 +73,34 @@ else
             }
         </ul>
     }
+}
+
+@if (_declining is not null)
+{
+    <div class="ba-sheet-backdrop" @onclick="CloseDecline"></div>
+    <section class="ba-sheet" role="dialog" aria-modal="true" aria-labelledby="decline-title">
+        <div class="ba-sheet__grip" aria-hidden="true"></div>
+        <h2 class="ba-sheet__name" id="decline-title">Why are you declining?</h2>
+        <p class="ba-sheet__meta">@_declining.Title</p>
+        <fieldset class="ba-reasons">
+            <legend class="ba-visually-hidden">Reason</legend>
+            @foreach (var reason in FieldDeclineReasons.All)
+            {
+                var r = reason;
+                <label class="ba-reason @(_reason == r ? "ba-reason--on" : "")">
+                    <input type="radio" name="decline-reason" value="@r" checked="@(_reason == r)" @onchange="() => _reason = r" />
+                    <span>@r</span>
+                </label>
+            }
+        </fieldset>
+        @if (_reason == FieldDeclineReasons.Other)
+        {
+            <label class="ba-label" for="decline-other">Your reason</label>
+            <textarea id="decline-other" class="ba-input" rows="2" maxlength="500" @bind="_otherReason" @bind:event="oninput"></textarea>
+        }
+        <button type="button" class="ba-sheet__signout" disabled="@(!CanDecline || _busy)" @onclick="ConfirmDeclineAsync">Decline task</button>
+        <button type="button" class="ba-sheet__close" @onclick="CloseDecline">Cancel</button>
+    </section>
 }
 
 @if (_accountOpen && _user is not null)
@@ -184,8 +212,30 @@ else
     private Task AcceptAsync(FieldTask task) =>
         RunAsync(() => Store.AcceptAsync(task.Id), $"Accepted{DueText(task)}.");
 
-    private Task DeclineAsync(FieldTask task) =>
-        RunAsync(() => Store.DeclineAsync(task.Id), "Declined — your manager will reassign it.");
+    // Always ask for a reason: the phone may be offline and not know whether the organization requires one,
+    // and the manager reassigns better with it.
+    private FieldTask? _declining;
+    private string? _reason;
+    private string? _otherReason;
+
+    private bool CanDecline => _reason is not null && (_reason != FieldDeclineReasons.Other || !string.IsNullOrWhiteSpace(_otherReason));
+
+    private void OpenDecline(FieldTask task)
+    {
+        _declining = task;
+        _reason = null;
+        _otherReason = null;
+    }
+
+    private void CloseDecline() => _declining = null;
+
+    private async Task ConfirmDeclineAsync()
+    {
+        if (_declining is not { } task || !CanDecline) return;
+        var why = _reason == FieldDeclineReasons.Other ? _otherReason!.Trim() : _reason!;
+        _declining = null;
+        await RunAsync(() => Store.DeclineAsync(task.Id, why), "Declined — your manager will reassign it.");
+    }
 
     private async Task CompleteAsync(FieldTask task)
     {

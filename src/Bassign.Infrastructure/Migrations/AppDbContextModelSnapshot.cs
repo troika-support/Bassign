@@ -27,6 +27,9 @@ namespace Bassign.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("AwaitingDeclineReasonForTaskId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("AwaitingProofForTaskId")
                         .HasColumnType("uniqueidentifier");
 
@@ -66,6 +69,27 @@ namespace Bassign.Infrastructure.Migrations
                     b.ToTable("WhatsAppBindings", (string)null);
                 });
 
+            modelBuilder.Entity("Bassign.Domain.Organizations.OrgClosure", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .IsUnique();
+
+                    b.ToTable("OrgClosures", (string)null);
+                });
+
             modelBuilder.Entity("Bassign.Domain.Organizations.OrganizationSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -75,6 +99,14 @@ namespace Bassign.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(7)
                         .HasColumnType("nvarchar(7)");
+
+                    b.Property<string>("AllowedInviteDomains")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool?>("DeclineReasonRequiredSetting")
+                        .HasColumnType("bit")
+                        .HasColumnName("DeclineReasonRequired");
 
                     b.Property<bool>("DigestEnabled")
                         .HasColumnType("bit");
@@ -88,10 +120,38 @@ namespace Bassign.Infrastructure.Migrations
                     b.Property<int>("EscalationCooldownMinutes")
                         .HasColumnType("int");
 
+                    b.Property<bool?>("HoldOutsideWorkingTimeSetting")
+                        .HasColumnType("bit")
+                        .HasColumnName("HoldOutsideWorkingTime");
+
+                    b.Property<int?>("InviteLifetimeDaysSetting")
+                        .HasColumnType("int")
+                        .HasColumnName("InviteLifetimeDays");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool?>("ObservePublicHolidaysSetting")
+                        .HasColumnType("bit")
+                        .HasColumnName("ObservePublicHolidays");
+
+                    b.Property<string>("PrivacyContactEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("PrivacyContactName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PrivacyContactPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<bool?>("ProofRequiredByDefaultSetting")
+                        .HasColumnType("bit")
+                        .HasColumnName("ProofRequiredByDefault");
 
                     b.Property<int>("QuietEndHour")
                         .HasColumnType("int");
@@ -110,9 +170,45 @@ namespace Bassign.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<int?>("WorkEndHourSetting")
+                        .HasColumnType("int")
+                        .HasColumnName("WorkEndHour");
+
+                    b.Property<int?>("WorkStartHourSetting")
+                        .HasColumnType("int")
+                        .HasColumnName("WorkStartHour");
+
+                    b.Property<int?>("WorkingDaysMask")
+                        .HasColumnType("int")
+                        .HasColumnName("WorkingDays");
+
                     b.HasKey("Id");
 
                     b.ToTable("OrganizationSettings", (string)null);
+                });
+
+            modelBuilder.Entity("Bassign.Domain.Tasks.TaskCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("TaskCategories", (string)null);
                 });
 
             modelBuilder.Entity("Bassign.Domain.Tasks.TaskItem", b =>
@@ -125,6 +221,9 @@ namespace Bassign.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -135,6 +234,10 @@ namespace Bassign.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("DeclineReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Detail")
                         .HasMaxLength(2000)
@@ -169,6 +272,8 @@ namespace Bassign.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssigneeId");
+
+                    b.HasIndex("CategoryId");
 
                     b.HasIndex("DueDate");
 
@@ -656,6 +761,31 @@ namespace Bassign.Infrastructure.Migrations
                     b.ToTable("Consents", (string)null);
                 });
 
+            modelBuilder.Entity("Bassign.Infrastructure.Settings.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<bool>("IsSecret")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("AppSettings", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -787,6 +917,14 @@ namespace Bassign.Infrastructure.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Bassign.Domain.Tasks.TaskItem", b =>
+                {
+                    b.HasOne("Bassign.Domain.Tasks.TaskCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

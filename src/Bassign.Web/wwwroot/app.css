@@ -239,3 +239,29 @@ body { font-family: Inter, system-ui, "Segoe UI", sans-serif; margin: 0; }
 .ba-datastrip { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .ba-datastrip__text { flex:1 1 320px; min-width:0; }
 .ba-lead { margin:0 0 16px; }
+
+/* ---------- Settings (16b) ---------- */
+.ba-settings-tabs .mud-tabs-tabbar { background:transparent; border-bottom:1px solid var(--ba-line); }
+.ba-setting { margin-bottom:12px; }
+.ba-setting__locked { display:flex; align-items:center; flex-wrap:wrap; gap:10px; min-height:44px; padding:6px 0; border-bottom:1px solid var(--ba-line); }
+.ba-setting__label { color:var(--ba-muted); font-size:.85rem; min-width:160px; }
+.ba-setting__value { color:var(--ba-ink); font-weight:500; overflow-wrap:anywhere; }
+.ba-help { margin:0; padding-left:18px; font-size:.88rem; line-height:1.6; color:var(--ba-secondary); }
+.ba-help li { margin-bottom:8px; }
+.ba-secret-reveal { padding:12px; margin-bottom:8px; border:1px solid var(--ba-line); border-radius:var(--ba-radius-dense); background:var(--ba-surface); }
+.ba-secret-reveal code { display:block; margin:4px 0 8px; overflow-wrap:anywhere; font-size:.85rem; color:var(--ba-ink); }
+
+/* Work calendar (Settings) */
+.ba-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.ba-daylist { list-style: none; margin: 0; padding: 0; }
+.ba-daylist li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--ba-line); min-height: 44px; }
+.ba-daylist li:last-child { border-bottom: 0; }
+.ba-daylist__date { flex: 0 0 9.5em; font-variant-numeric: tabular-nums; color: var(--ba-secondary); font-size: .88rem; }
+.ba-daylist__name { flex: 1; color: var(--ba-ink); }
+.ba-daylist__off .ba-daylist__name { text-decoration: line-through; color: var(--ba-muted); }
+.ba-settings-tabs .mud-tabs-panels { padding-top: 16px; }
+
+/* Task categories */
+.ba-toolbar__category { width: min(100%, 220px); }
+.ba-tag { display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; font-size:.75rem;
+  background:var(--ba-surface); color:var(--ba-secondary); border:1px solid var(--ba-line); vertical-align:middle; }

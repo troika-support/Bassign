@@ -84,6 +84,7 @@ public class ReminderJobTests
     {
         var org = Seed.Org();
         org.ConfigureNotifications(12 * 60, 60, 24 * 60, true, 6, 20, 6);   // 12h lead
+        org.ConfigureCalendar(OrganizationSettings.MondayToFriday, 8, 17, holdOutsideWorkingTime: false, observePublicHolidays: true);   // quiet hours only
         var (sut, tasks, outbox, clock) = Create(org);
         clock.Now = new DateTimeOffset(2026, 11, 24, 19, 0, 0, TimeSpan.Zero);   // 21:00 local
         tasks.Add(Seed.Task(clock.Now.AddDays(-1), new DateTimeOffset(2026, 11, 25, 5, 0, 0, TimeSpan.Zero)));   // due 07:00 local

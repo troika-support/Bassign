@@ -24,7 +24,7 @@ public sealed class TasksController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateTaskRequest body, CancellationToken ct)
     {
         var result = await sender.Send(
-            new CreateTaskCommand(body.Title, body.Detail, body.DueDate, body.RequiresProofPhoto, body.AssigneeId), ct);
+            new CreateTaskCommand(body.Title, body.Detail, body.DueDate, body.RequiresProofPhoto, body.AssigneeId, body.CategoryId), ct);
         return result.IsSuccess
             ? CreatedAtAction(nameof(GetById), new { id = result.Value }, new { id = result.Value })
             : ToProblem(result.Error);
@@ -38,9 +38,9 @@ public sealed class TasksController(ISender sender) : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? assigneeId, CancellationToken ct)
+    public async Task<IActionResult> List([FromQuery] string? status, [FromQuery] string? assigneeId, [FromQuery] Guid? categoryId, CancellationToken ct)
     {
-        var items = await sender.Send(new ListTasksQuery(status, assigneeId), ct);
+        var items = await sender.Send(new ListTasksQuery(status, assigneeId, categoryId), ct);
         return Ok(items);
     }
 
@@ -48,7 +48,7 @@ public sealed class TasksController(ISender sender) : ControllerBase
     [Authorize(Policy = "Managers")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTaskRequest body, CancellationToken ct)
     {
-        var result = await sender.Send(new UpdateTaskCommand(id, body.Title, body.Detail, body.DueDate), ct);
+        var result = await sender.Send(new UpdateTaskCommand(id, body.Title, body.Detail, body.DueDate, body.CategoryId), ct);
         return result.IsSuccess ? NoContent() : ToProblem(result.Error);
     }
 
@@ -98,8 +98,9 @@ public sealed class TasksController(ISender sender) : ControllerBase
 }
 
 public sealed record CreateTaskRequest(
-    string Title, string? Detail, DateTimeOffset? DueDate, bool RequiresProofPhoto, string? AssigneeId);
-public sealed record UpdateTaskRequest(string Title, string? Detail, DateTimeOffset? DueDate);
+    string Title, string? Detail, DateTimeOffset? DueDate, bool RequiresProofPhoto, string? AssigneeId, Guid? CategoryId = null);
+/// <summary>A full replace: omitting CategoryId clears the category.</summary>
+public sealed record UpdateTaskRequest(string Title, string? Detail, DateTimeOffset? DueDate, Guid? CategoryId = null);
 public sealed record AssignTaskRequest(string AssigneeId);
 public sealed record CompleteTaskRequest(string? ProofPhotoRef);
 public sealed record DeclineTaskRequest(string? Reason);

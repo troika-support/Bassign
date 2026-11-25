@@ -40,3 +40,10 @@ internal static class FieldJson
 {
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 }
+
+/// <summary>Same labels as the server's DeclineReasons (the label is what's stored). "Other" asks for text.</summary>
+public static class FieldDeclineReasons
+{
+    public const string Other = "Other";
+    public static readonly IReadOnlyList<string> All = ["Too busy", "Not my area", "Need more information", "Can't make the deadline", Other];
+}

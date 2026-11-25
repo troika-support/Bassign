@@ -1,6 +1,7 @@
 @page "/tasks"
 @attribute [Authorize]
 @using Bassign.Application.Tasks.ListTasks
+@using Bassign.Application.Tasks.Settings
 @inject IUiSender Sender
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
@@ -24,6 +25,18 @@
                        OnClick="@(() => _filter = key)">@label</MudButton>
         }
     </div>
+    @if (_categories.Count > 0)
+    {
+        <div class="ba-toolbar__category">
+            <MudSelect T="Guid?" @bind-Value="_category" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Dense="true">
+                <MudSelectItem T="Guid?" Value="@ListTasksQuery.Uncategorised">No category</MudSelectItem>
+                @foreach (var c in _categories)
+                {
+                    <MudSelectItem T="Guid?" Value="@c.Id">@(c.IsArchived ? $"{c.Name} (archived)" : c.Name)</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
+    }
     <div class="ba-toolbar__search">
         <MudTextField @bind-Value="_search" Placeholder="Search tasks" Variant="Variant.Outlined" Margin="Margin.Dense"
                       Immediate="true" DebounceInterval="200" aria-label="Search tasks"
@@ -60,6 +73,7 @@ else
                 <TemplateColumn Title="Task">
                     <CellTemplate>
                         <a class="ba-rowlink" href="/tasks/@context.Item.Id" @onclick:stopPropagation="true">@context.Item.Title</a>
+                        @if (context.Item.CategoryName is { } cat) { <span class="ba-tag">@cat</span> }
                     </CellTemplate>
                 </TemplateColumn>
                 <TemplateColumn Title="Assignee">
@@ -85,6 +99,8 @@ else
     private string _search = "";
     private string _filter = "all";
     private TimeZoneInfo _zone = TimeZoneInfo.Utc;
+    private Guid? _category;
+    private IReadOnlyList<TaskCategoryVm> _categories = [];
 
     private readonly (string Key, string Label)[] _pills =
     [
@@ -94,6 +110,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         _zone = await Clock.ZoneAsync();
+        _categories = (await Sender.Send(new GetTaskDefaultsQuery(IncludeArchived: true))).Categories;
         await Load();
         TaskEvents.Changed += OnTasksChanged;
     }
@@ -113,7 +130,10 @@ else
         var now = DateTimeOffset.UtcNow;
         IEnumerable<TaskListItemDto> q = _all ?? [];
         if (!string.IsNullOrWhiteSpace(_search))
-            q = q.Where(t => t.Title.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            q = q.Where(t => t.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                             || (t.CategoryName?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false));
+        if (_category is { } category)
+            q = q.Where(t => category == ListTasksQuery.Uncategorised ? t.CategoryId is null : t.CategoryId == category);
         q = _filter switch
         {
             "todo" => q.Where(t => t.Status == "Todo"),

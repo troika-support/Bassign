@@ -36,3 +36,7 @@ Production (IIS): environment variable `Ai__ApiKey`. Tell clients that task titl
 $env:Ai__ApiKey="sk-ant-..."; dotnet test tests/Bassign.UnitTests --filter "FullyQualifiedName~AssignmentEval" -- xUnit.Explicit=only
 ```
 (or run *Live_model_meets_the_threshold* from Test Explorer). It must stay ≥ 80% after any prompt or model change.
+
+## Settings → AI (step 16b)
+- Admins can turn **suggestions** and the **daily summary** on/off separately, set the confidence threshold, and change provider / model / key. Changes apply on the next call (no restart); **Test connection** does a one-word round trip.
+- **Whose account:** on the server, `Default__Ai__ApiKey` (and `Default__Ai__Provider` / `Default__Ai__Model`) = *your* account until the client enters their own key; `Ai__ApiKey` = locked to your account. The AI tab says which is in use and shows the last 30 days' calls and tokens (from `AiUsage`).

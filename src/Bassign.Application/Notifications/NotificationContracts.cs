@@ -9,6 +9,10 @@ public static class NotificationKinds
 
     /// <summary>Spec §3.C.5: escalations (to managers) may be sent during quiet hours; nothing else.</summary>
     public static bool AllowedInQuietHours(string kind) => kind == TaskEscalation;
+
+    /// <summary>Decision #13: messages to staff wait for working time. Escalations go out regardless; the digest
+    /// is sent at its own hour, on working days only.</summary>
+    public static bool HeldOutsideWorkingTime(string kind) => kind is TaskAssigned or TaskReminder;
 }
 
 /// <summary>A notification to queue once. <see cref="DedupeKey"/> makes scheduled jobs idempotent:

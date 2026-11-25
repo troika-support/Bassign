@@ -156,6 +156,19 @@ public static class CloudApiWebhook
         return body.ToJsonString();
     }
 
+    /// <summary>A Cloud-API-shaped status callback (used to feed Twilio status callbacks through the same inbox).</summary>
+    public static string BuildStatus(string id, string status) =>
+        new JsonObject
+        {
+            ["entry"] = new JsonArray(new JsonObject
+            {
+                ["changes"] = new JsonArray(new JsonObject
+                {
+                    ["value"] = new JsonObject { ["statuses"] = new JsonArray(new JsonObject { ["id"] = id, ["status"] = status }) }
+                })
+            })
+        }.ToJsonString();
+
     private static string? Str(JsonElement e, string name) =>
         e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
 

@@ -3,6 +3,7 @@ using Bassign.Application.Ai;
 using Bassign.Application.Ai.DigestSummary;
 using Bassign.Application.Common.Directory;
 using Bassign.Application.Organizations;
+using Bassign.Application.Organizations.Calendar;
 using Bassign.Application.Tasks;
 using Bassign.Domain.Organizations;
 using Bassign.Domain.Teams;
@@ -23,10 +24,9 @@ public sealed class SendDueRemindersHandler(
 {
     public async ValueTask<int> Handle(SendDueRemindersCommand request, CancellationToken cancellationToken)
     {
-        var org = await organization.FindAsync(cancellationToken) ?? OrganizationSettings.CreateDefault();
-        var zone = NotificationSchedule.Zone(org.TimeZoneId);
         var now = clock.GetUtcNow();
-        var lead = TimeSpan.FromMinutes(org.ReminderLeadMinutes);
+        var calendar = await WorkCalendar.LoadAsync(organization, now, cancellationToken);
+        var lead = TimeSpan.FromMinutes(calendar.Settings.ReminderLeadMinutes);
 
         var due = (await tasks.ListAsync(null, null, cancellationToken))
             .Where(t => t.Status is TaskStatus.Todo or TaskStatus.Accepted     // no-op once Done/Declined
@@ -38,13 +38,11 @@ public sealed class SendDueRemindersHandler(
         var queued = 0;
         foreach (var t in due)
         {
-            DateTimeOffset? notBefore = null;
-            if (NotificationSchedule.IsQuiet(now, zone, org.QuietStartHour, org.QuietEndHour))
-            {
-                var quietEnds = NotificationSchedule.QuietEndsAt(now, zone, org.QuietEndHour);
-                if (quietEnds >= t.DueDate) continue;   // §3.C.5: suppressed — it would arrive after the deadline
-                notBefore = quietEnds;
-            }
+            // §3.C.5 + decision #13: in quiet hours, outside working time or on a holiday the reminder waits —
+            // and is suppressed if it could only arrive after the deadline.
+            var sendAt = calendar.NextSendTime(NotificationKinds.TaskReminder, now);
+            if (sendAt is null || sendAt >= t.DueDate) continue;
+            DateTimeOffset? notBefore = sendAt > now ? sendAt : null;
 
             var key = $"reminder:{t.Id:N}:{t.AssigneeId}:{t.DueDate!.Value.UtcTicks}";
             if (await outbox.EnqueueOnceAsync(new NotificationRequest(NotificationKinds.TaskReminder, t.AssigneeId!, t.Id, key, null, now, notBefore), cancellationToken))
@@ -113,6 +111,10 @@ public sealed class SendDailyDigestsHandler(
         var now = clock.GetUtcNow();
         var (isDue, date) = NotificationSchedule.DigestDue(now, NotificationSchedule.Zone(org.TimeZoneId), org.DigestHour);
         if (!isDue) return 0;
+
+        // Decision #13: no digest on weekends, public holidays or closures — Monday's covers the gap.
+        var calendar = await WorkCalendar.LoadAsync(organization, org, now, cancellationToken);
+        if (!calendar.IsWorkingDay(date)) return 0;
 
         var managers = await users.ListActiveInRolesAsync([TeamRoles.Manager, TeamRoles.Admin], cancellationToken);
         var waiting = new List<(DirectoryUser Manager, string Key)>();

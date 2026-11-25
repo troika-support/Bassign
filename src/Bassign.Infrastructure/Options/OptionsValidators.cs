@@ -26,37 +26,34 @@ public sealed class AuthOptionsValidator : IValidateOptions<AuthOptions>
     }
 }
 
+/// <summary>Only the server-level rule: the simulator is development-only. Provider credentials are Admin-editable,
+/// so an incomplete setup means "WhatsApp off, everyone gets email" — never "the app won't start".</summary>
 public sealed class WhatsAppOptionsValidator(IHostEnvironment env) : IValidateOptions<WhatsAppOptions>
 {
-    public ValidateOptionsResult Validate(string? name, WhatsAppOptions o)
-    {
-        var errors = new List<string>();
-        if (o.IsSimulator)
-        {
-            if (!env.IsDevelopment()) errors.Add("WhatsApp:Provider 'simulator' is for development only — set it to '360dialog'.");
-        }
-        else
-        {
-            if (!string.Equals(o.Provider, "360dialog", StringComparison.OrdinalIgnoreCase)) errors.Add("WhatsApp:Provider must be 'simulator' or '360dialog'.");
-            if (string.IsNullOrWhiteSpace(o.ApiKey)) errors.Add("WhatsApp:ApiKey is required (WhatsApp__ApiKey).");
-            if (!PhoneNumbers.IsE164(o.BusinessNumber)) errors.Add("WhatsApp:BusinessNumber must be E.164, e.g. +263771234567.");
-        }
-        if (!env.IsDevelopment() && o.WebhookToken.Length < 24)
-            errors.Add("WhatsApp:WebhookToken must be at least 24 random characters (WhatsApp__WebhookToken).");
-        return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
-    }
+    public ValidateOptionsResult Validate(string? name, WhatsAppOptions o) =>
+        o.IsSimulator && !env.IsDevelopment()
+            ? ValidateOptionsResult.Fail("WhatsApp:Provider 'simulator' is for development only.")
+            : ValidateOptionsResult.Success;
 }
 
+public sealed class PublicOptionsValidator(IHostEnvironment env) : IValidateOptions<PublicOptions>
+{
+    public ValidateOptionsResult Validate(string? name, PublicOptions o) =>
+        !env.IsDevelopment() && !(Uri.TryCreate(o.ApiBaseUrl, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps)
+            ? ValidateOptionsResult.Fail("Public:ApiBaseUrl must be the API's https:// address, e.g. https://api.client.co.zw (Public__ApiBaseUrl).")
+            : ValidateOptionsResult.Success;
+}
+
+/// <summary>Only checks what an Admin can't fix from Settings (server settings). Provider credentials are
+/// Admin-editable, so an incomplete setup means "email off for now" — never "the app won't start".</summary>
 public sealed class EmailOptionsValidator(IHostEnvironment env) : IValidateOptions<EmailOptions>
 {
     public ValidateOptionsResult Validate(string? name, EmailOptions o)
     {
         var errors = new List<string>();
-        if (o.IsSendGrid && string.IsNullOrWhiteSpace(o.ApiKey)) errors.Add("Email:ApiKey is required for SendGrid (Email__ApiKey).");
-        if (!o.IsDisabled && !o.FromAddress.Contains('@', StringComparison.Ordinal)) errors.Add("Email:FromAddress must be an email address.");
         if (!env.IsDevelopment())
         {
-            if (!o.IsSendGrid && !o.IsDisabled) errors.Add("Email:Provider 'pickup' is for development — use 'sendgrid' (or 'none').");
+            if (o.IsPickup) errors.Add("Email:Provider 'pickup' is for development only.");
             if (!Uri.TryCreate(o.PublicBaseUrl, UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps)
                 errors.Add("Email:PublicBaseUrl must be the Web app's https:// address (used in email links).");
         }

@@ -1,0 +1,131 @@
+@using Bassign.Application.Tasks.Settings
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+
+@if (_vm is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <section class="ba-card pa-5" aria-labelledby="taskdef-h">
+                <h2 class="ba-section-label" id="taskdef-h">New tasks</h2>
+                <MudSwitch T="bool" @bind-Value="_proofByDefault" Color="Color.Primary" Label="Require a proof-of-work photo by default" />
+                <p class="ba-muted ba-lead" style="margin:0 0 12px 46px;">Pre-ticks the box on new tasks. Managers can still untick it.</p>
+
+                <MudSwitch T="bool" @bind-Value="_reasonRequired" Color="Color.Primary" Label="Staff must give a reason to decline" />
+                <p class="ba-muted ba-lead" style="margin:0 0 12px 46px;">They pick one — Too busy, Not my area, Need more information, Can't make the deadline — or type their own. On WhatsApp it's one extra tap.</p>
+
+                <h3 class="ba-section-label mt-4">Due time</h3>
+                <p class="ba-muted" style="margin:0;">A task given a date but no time is due at the end of the working day — <strong>@(_vm.DefaultDueTime.ToString(@"hh\:mm", System.Globalization.CultureInfo.InvariantCulture))</strong>. Change working hours on the Work calendar tab.</p>
+
+                <div class="d-flex gap-2 mt-5">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveDefaults">Save</MudButton>
+                </div>
+            </section>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <section class="ba-card pa-5" aria-labelledby="cat-h">
+                <h2 class="ba-section-label" id="cat-h">Categories</h2>
+                <p class="ba-muted ba-lead">Optional labels managers can put on tasks, and filter the Tasks page by. Archiving hides a category from new tasks; tasks that already have it keep it.</p>
+
+                <div class="d-flex gap-2 align-start">
+                    <MudTextField T="string" @bind-Value="_newName" Label="New category" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  MaxLength="40" Placeholder="e.g. Maintenance" OnKeyUp="AddOnEnter" Class="flex-grow-1" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1" Disabled="_busy || string.IsNullOrWhiteSpace(_newName)" OnClick="AddCategory">Add</MudButton>
+                </div>
+
+                @if (_vm.Categories.Count == 0)
+                {
+                    <p class="ba-muted mt-3">No categories yet. Tasks work fine without them.</p>
+                }
+                else
+                {
+                    <ul class="ba-daylist mt-2">
+                        @foreach (var c in _vm.Categories)
+                        {
+                            var cat = c;
+                            <li class="@(cat.IsArchived ? "ba-daylist__off" : null)">
+                                @if (_editing == cat.Id)
+                                {
+                                    <MudTextField T="string" @bind-Value="_editName" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="40"
+                                                  Label="@($"Rename {cat.Name}")" Class="flex-grow-1" />
+                                    <MudButton Size="Size.Small" Color="Color.Primary" Disabled="_busy" OnClick="() => Rename(cat)">Save</MudButton>
+                                    <MudButton Size="Size.Small" Disabled="_busy" OnClick="() => _editing = null">Cancel</MudButton>
+                                }
+                                else
+                                {
+                                    <span class="ba-daylist__name">@cat.Name @if (cat.IsArchived) { <span class="ba-muted"> · archived</span> }</span>
+                                    <MudButton Size="Size.Small" Disabled="_busy" OnClick="() => StartEdit(cat)" aria-label="@($"Rename {cat.Name}")">Rename</MudButton>
+                                    <MudButton Size="Size.Small" Disabled="_busy" OnClick="() => ToggleArchive(cat)">@(cat.IsArchived ? "Restore" : "Archive")</MudButton>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private TaskDefaultsVm? _vm;
+    private bool _proofByDefault, _reasonRequired, _busy;
+    private string? _newName, _editName;
+    private Guid? _editing;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _vm = await Sender.Send(new GetTaskDefaultsQuery(IncludeArchived: true));
+        _proofByDefault = _vm.ProofRequiredByDefault;
+        _reasonRequired = _vm.DeclineReasonRequired;
+    }
+
+    private async Task SaveDefaults()
+    {
+        _busy = true;
+        var r = await Sender.TrySend(new SaveTaskDefaultsCommand(_proofByDefault, _reasonRequired));
+        _busy = false;
+        Snackbar.Add(r.IsSuccess ? "Task settings saved." : r.Error.Message, r.IsSuccess ? Severity.Success : Severity.Error);
+    }
+
+    private async Task AddOnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newName)) await AddCategory();
+    }
+
+    private async Task AddCategory()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) return;
+        _busy = true;
+        var r = await Sender.TrySend(new AddTaskCategoryCommand(_newName));
+        _busy = false;
+        if (!r.IsSuccess) { Snackbar.Add(r.Error.Message, Severity.Error); return; }
+        _newName = null;
+        await Load();
+    }
+
+    private void StartEdit(TaskCategoryVm c)
+    {
+        _editing = c.Id;
+        _editName = c.Name;
+    }
+
+    private Task Rename(TaskCategoryVm c) => Update(c, _editName ?? c.Name, c.IsArchived);
+    private Task ToggleArchive(TaskCategoryVm c) => Update(c, c.Name, !c.IsArchived);
+
+    private async Task Update(TaskCategoryVm c, string name, bool archived)
+    {
+        _busy = true;
+        var r = await Sender.TrySend(new UpdateTaskCategoryCommand(c.Id, name, archived));
+        _busy = false;
+        if (!r.IsSuccess) { Snackbar.Add(r.Error.Message, Severity.Error); return; }
+        _editing = null;
+        await Load();
+    }
+}

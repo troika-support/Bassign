@@ -1,0 +1,125 @@
+@using Bassign.Application.Ai
+@using Bassign.Application.Settings
+@inject IUiSender Sender
+@inject ISnackbar Snackbar
+
+@if (_states is null || _status is null)
+{
+    <MudProgressCircular Indeterminate="true" aria-label="Loading" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="7">
+            <section class="ba-card pa-5 mb-3" aria-labelledby="ai-feat-h">
+                <h2 class="ba-section-label" id="ai-feat-h">AI features</h2>
+                <p class="ba-muted ba-lead">AI only ever suggests — a person always decides. Turn off anything you don't want.</p>
+                <AdminSettingField State="@(S("Ai:SuggestionsEnabled"))" Label="Suggest who should do a task"
+                                   HelpText="Shown in the assign dialog, based on recent work and workload." OnChange="Track" />
+                <AdminSettingField State="@(S("Ai:SummariesEnabled"))" Label="Write the managers' daily summary"
+                                   HelpText="A short briefing on the dashboard and in the 06:00 digest." OnChange="Track" />
+                <AdminSettingField State="@(S("Ai:MinConfidence"))" Label="Only suggest when at least this sure (0.3 – 0.95)"
+                                   HelpText="Higher = fewer, safer suggestions. Recommended: 0.6" OnChange="Track" />
+            </section>
+
+            <section class="ba-card pa-5" aria-labelledby="ai-prov-h">
+                <h2 class="ba-section-label" id="ai-prov-h">AI provider</h2>
+                @if (_status.UsingProviderKey)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">You're using the AI account provided with your installation. Enter your own key below to use (and pay for) your own.</MudAlert>
+                }
+                <AdminSettingField State="@(S("Ai:Provider"))" Label="Provider" ChoiceLabels="ProviderLabels" OnChange="Track" />
+                @if (Provider != "none")
+                {
+                    <AdminSettingField State="@(S("Ai:Model"))" Label="Model"
+                                       HelpText="@(Provider == "claude" ? "e.g. claude-haiku-5-5" : "e.g. gpt-6-luna, deepseek-flash, or llama3.2 for a local Ollama")" OnChange="Track" />
+                    <AdminSettingField State="@(S("Ai:ApiKey"))" Label="API key" HelpText="@(Provider == "openai" ? "Not needed for a local Ollama" : null)" OnChange="Track" />
+                }
+                @if (Provider == "openai")
+                {
+                    <AdminSettingField State="@(S("Ai:BaseUrl"))" Label="Server address (optional)"
+                                       HelpText="Empty = OpenAI. e.g. https://api.deepseek.com/v1 or http://localhost:11434/v1 (Ollama)" OnChange="Track" />
+                    <AdminSettingField State="@(S("Ai:EmbeddingModel"))" Label="Embedding model (optional)"
+                                       HelpText="e.g. text-embedding-3-small — adds a similarity score to suggestions" OnChange="Track" />
+                }
+                <p class="ba-muted" style="font-size:.82rem; margin:8px 0 0;">
+                    Task titles and team names are sent to the provider, usually outside Zimbabwe (see the privacy notice).
+                    A local Ollama keeps everything on your own server.
+                </p>
+                <div class="d-flex flex-wrap gap-2 mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _pending.Count == 0)" OnClick="Save">Save</MudButton>
+                    @if (_pending.Count > 0) { <MudButton Variant="Variant.Text" Disabled="_busy" OnClick="Load">Discard changes</MudButton> }
+                    <MudButton Variant="Variant.Outlined" Disabled="@(_busy || _pending.Count > 0)" OnClick="Test" StartIcon="@Icons.Material.Outlined.NetworkCheck">Test connection</MudButton>
+                </div>
+                @if (_testResult is not null)
+                {
+                    <MudAlert Severity="@(_testOk ? Severity.Success : Severity.Error)" Dense="true" Class="mt-3">@_testResult</MudAlert>
+                }
+            </section>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <section class="ba-card pa-5" aria-labelledby="ai-use-h">
+                <h2 class="ba-section-label" id="ai-use-h">Usage — last 30 days</h2>
+                <dl class="ba-facts">
+                    <dt>AI calls</dt><dd>@_status.Usage.Calls.ToString("N0")</dd>
+                    <dt>Failed</dt><dd>@_status.Usage.Failures.ToString("N0")</dd>
+                    <dt>Tokens in</dt><dd>@_status.Usage.InputTokens.ToString("N0")</dd>
+                    <dt>Tokens out</dt><dd>@_status.Usage.OutputTokens.ToString("N0")</dd>
+                    <dt>Model</dt><dd>@(_status.Model ?? "—")</dd>
+                </dl>
+                <p class="ba-muted" style="font-size:.82rem; margin:12px 0 0;">Each suggestion uses about 2,000 tokens in and 200 out — a fraction of a US cent with a small model.</p>
+            </section>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private static readonly IReadOnlyDictionary<string, string> ProviderLabels = new Dictionary<string, string>
+    {
+        ["claude"] = "Anthropic Claude", ["openai"] = "OpenAI-compatible (OpenAI, Azure OpenAI, DeepSeek, Ollama)", ["none"] = "Off"
+    };
+
+    private IReadOnlyList<SettingState>? _states;
+    private AiSetupStatus? _status;
+    private readonly Dictionary<string, SettingChange> _pending = new(StringComparer.OrdinalIgnoreCase);
+    private string? _testResult;
+    private bool _busy, _testOk;
+
+    private SettingState S(string key) => _states!.First(s => string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    private string Provider =>
+        (_pending.TryGetValue("Ai:Provider", out var p) ? p.Value : S("Ai:Provider").Value)?.ToLowerInvariant() ?? "none";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _pending.Clear();
+        _states = await Sender.Send(new GetAdminSettingsQuery("Ai"));
+        _status = await Sender.Send(new GetAiStatusQuery());
+    }
+
+    private void Track(KeyValuePair<string, SettingChange> change) => _pending[change.Key] = change.Value;
+
+    private async Task Save()
+    {
+        _busy = true;
+        var result = await Sender.TrySend(new SaveAdminSettingsCommand(new Dictionary<string, SettingChange>(_pending)));
+        _busy = false;
+        if (!result.IsSuccess) { Snackbar.Add(result.Error.Message, Severity.Error); return; }
+        Snackbar.Add("AI settings saved.", Severity.Success);
+        _states = null;
+        await Load();
+    }
+
+    private async Task Test()
+    {
+        _busy = true;
+        _testResult = null;
+        var result = await Sender.TrySend(new TestAiCommand());
+        _busy = false;
+        _testOk = result.IsSuccess;
+        _testResult = result.IsSuccess ? result.Value : result.Error.Message;
+    }
+}

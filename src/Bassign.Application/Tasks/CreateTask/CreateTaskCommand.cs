@@ -1,6 +1,7 @@
 using Bassign.Application.Common.Auditing;
 using Bassign.Application.Common.Persistence;
 using Bassign.Application.Common.Security;
+using Bassign.Application.Tasks.Settings;
 using Bassign.Domain.Common;
 using Bassign.Domain.Tasks;
 using FluentValidation;
@@ -13,7 +14,8 @@ public sealed record CreateTaskCommand(
     string? Detail,
     DateTimeOffset? DueDate,
     bool RequiresProofPhoto,
-    string? AssigneeId) : IRequest<Result<Guid>>, IAuditableRequest
+    string? AssigneeId,
+    Guid? CategoryId = null) : IRequest<Result<Guid>>, IAuditableRequest
 {
     public string AuditAction => "task.create";
     public string AuditEntityType => "TaskItem";
@@ -33,17 +35,20 @@ public sealed class CreateTaskCommandValidator : AbstractValidator<CreateTaskCom
 }
 
 public sealed class CreateTaskHandler(
-    ITaskRepository tasks, IUnitOfWork uow, ICurrentUser currentUser, TimeProvider clock)
+    ITaskRepository tasks, ITaskCategoryRepository categories, IUnitOfWork uow, ICurrentUser currentUser, TimeProvider clock)
     : IRequestHandler<CreateTaskCommand, Result<Guid>>
 {
     public async ValueTask<Result<Guid>> Handle(CreateTaskCommand request, CancellationToken cancellationToken)
     {
+        if (await TaskSettingsErrors.CheckPickableAsync(categories, request.CategoryId, null, cancellationToken) is { } bad)
+            return bad;
+
         TaskItem task;
         try
         {
             task = TaskItem.Create(
                 request.Title, currentUser.UserId, clock.GetUtcNow(),
-                request.Detail, request.DueDate, request.RequiresProofPhoto);
+                request.Detail, request.DueDate, request.RequiresProofPhoto, request.CategoryId);
             if (!string.IsNullOrWhiteSpace(request.AssigneeId))
                 task.AssignTo(request.AssigneeId);
         }

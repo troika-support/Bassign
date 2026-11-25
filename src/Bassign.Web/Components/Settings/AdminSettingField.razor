@@ -1,0 +1,100 @@
+@using Bassign.Application.Settings
+
+@* One Admin setting. Secrets are write-only: once saved they show as "Saved" with Replace / Remove, never the value.
+   A value set by a server environment variable is read-only ("Set by your provider"). *@
+<div class="ba-setting">
+    @if (State.Locked)
+    {
+        <div class="ba-setting__locked">
+            <span class="ba-setting__label">@Label</span>
+            <span class="ba-setting__value">@(State.Kind == SettingKind.Secret ? "Saved" : Display(State.Value))</span>
+            <span class="ba-pill" title="Set on the server by whoever manages this installation">Set by your provider</span>
+        </div>
+    }
+    else if (State.Kind == SettingKind.Secret)
+    {
+        @if (State.HasValue && State.Source == SettingSource.Default && !_replacing)
+        {
+            @* A provider default (Default__… on the server): in use until this organisation enters its own. *@
+            <div class="ba-setting__locked">
+                <span class="ba-setting__label">@Label</span>
+                <span class="ba-setting__value">Provided with your installation</span>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _replacing = true">Use our own</MudButton>
+            </div>
+        }
+        else if (State.HasValue && !_replacing && !_removed)
+        {
+            <div class="ba-setting__locked">
+                <span class="ba-setting__label">@Label</span>
+                <span class="ba-setting__value">•••••••• Saved</span>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _replacing = true">Replace</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="Remove">Remove</MudButton>
+            </div>
+        }
+        else
+        {
+            <MudTextField T="string" Label="@Label" Variant="Variant.Outlined" Margin="Margin.Dense" InputType="InputType.Password"
+                          Value="_value" ValueChanged="Changed" HelperText="@(_removed ? "Will be removed when you save." : HelpText)"
+                          autocomplete="new-password" />
+        }
+    }
+    else if (State.Kind == SettingKind.Choice && State.Choices is { } choices)
+    {
+        <MudSelect T="string" Label="@Label" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@HelpText"
+                   Value="_value" ValueChanged="Changed">
+            @foreach (var c in choices)
+            {
+                <MudSelectItem T="string" Value="@c">@(ChoiceLabels?.GetValueOrDefault(c) ?? c)</MudSelectItem>
+            }
+        </MudSelect>
+    }
+    else if (State.Kind == SettingKind.Bool)
+    {
+        <MudSwitch T="bool" Color="Color.Primary" Label="@Label" Value="@(bool.TryParse(_value, out var b) && b)"
+                   ValueChanged="@(v => Changed(v ? "true" : "false"))" />
+        @if (HelpText is not null) { <div class="ba-hint" style="margin:0 0 8px;">@HelpText</div> }
+    }
+    else
+    {
+        <MudTextField T="string" Label="@Label" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@HelpText"
+                      InputType="@(State.Kind is SettingKind.Int or SettingKind.Decimal ? InputType.Number : State.Kind == SettingKind.Email ? InputType.Email : InputType.Text)"
+                      Value="_value" ValueChanged="Changed" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SettingState State { get; set; } = default!;
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? HelpText { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, string>? ChoiceLabels { get; set; }
+    /// <summary>Raised with the key and the change; the page collects changes and saves them together.</summary>
+    [Parameter] public EventCallback<KeyValuePair<string, SettingChange>> OnChange { get; set; }
+
+    private string? _value;
+    private bool _replacing, _removed;
+    private string? _key;
+
+    protected override void OnParametersSet()
+    {
+        if (_key == State.Key) return;   // keep in-progress edits across re-renders
+        _key = State.Key;
+        _value = State.Kind == SettingKind.Secret ? null : State.Value;
+        _replacing = _removed = false;
+    }
+
+    private Task Changed(string? value)
+    {
+        _value = value;
+        _removed = false;
+        return OnChange.InvokeAsync(new(State.Key, new SettingChange(value, Clear: string.IsNullOrWhiteSpace(value) && State.Kind != SettingKind.Secret)));
+    }
+
+    private Task Remove()
+    {
+        _removed = true;
+        _replacing = true;
+        return OnChange.InvokeAsync(new(State.Key, new SettingChange(null, Clear: true)));
+    }
+
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+}

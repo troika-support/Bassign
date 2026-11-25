@@ -21,6 +21,10 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         builder.Property(t => t.AssigneeId).HasMaxLength(64);
         builder.Property(t => t.CreatedById).HasMaxLength(64).IsRequired();
         builder.Property(t => t.ProofPhotoRef).HasMaxLength(512);
+        builder.Property(t => t.DeclineReason).HasMaxLength(TaskItem.DeclineReasonMaxLength);
+
+        // Categories are archived, never deleted, so Restrict is safe and keeps reports honest.
+        builder.HasOne<TaskCategory>().WithMany().HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property<long>(SyncVersion).IsRowVersion().HasConversion<byte[]>();
 
@@ -31,5 +35,6 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         builder.HasIndex(t => t.Status);
         builder.HasIndex(t => t.AssigneeId);
         builder.HasIndex(t => t.DueDate);
+        builder.HasIndex(t => t.CategoryId);
     }
 }

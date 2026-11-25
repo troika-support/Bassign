@@ -74,6 +74,18 @@ public sealed class WhatsAppLog(AppDbContext db) : IWhatsAppLog
         });
     }
 
+    public async Task<IReadOnlyList<WaButton>> LastOutboundActionsAsync(string phoneE164, DateTimeOffset since, CancellationToken cancellationToken = default)
+    {
+        var json = await db.WhatsAppMessages.AsNoTracking()
+            .Where(m => m.PhoneE164 == phoneE164 && m.Direction == "out" && m.At >= since)
+            .OrderByDescending(m => m.At).ThenByDescending(m => m.Id)
+            .Select(m => m.ActionsJson)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (string.IsNullOrEmpty(json)) return [];
+        try { return JsonSerializer.Deserialize<List<WaButton>>(json, Json) ?? []; }
+        catch (JsonException) { return []; }
+    }
+
     public Task UpdateStatusAsync(string providerMessageId, string status, CancellationToken cancellationToken = default) =>
         db.WhatsAppMessages
             .Where(m => m.ProviderMessageId == providerMessageId && m.Direction == "out")
@@ -82,12 +94,16 @@ public sealed class WhatsAppLog(AppDbContext db) : IWhatsAppLog
     private static string Truncate(string value) => value.Length <= 2000 ? value : value[..2000];
 }
 
-public sealed class WhatsAppSettings(IOptions<WhatsAppOptions> options) : IWhatsAppSettings
+/// <summary>The WhatsApp setup in effect right now (Admin settings + server overrides), read live.</summary>
+public sealed class WhatsAppSettings(IOptionsMonitor<WhatsAppOptions> options) : IWhatsAppSettings
 {
+    /// <summary>Null unless WhatsApp is fully set up: linking and notifications stay off until then.</summary>
     public string? BusinessNumberE164 =>
-        PhoneNumbers.IsE164(options.Value.BusinessNumber) ? options.Value.BusinessNumber : null;
+        options.CurrentValue is { IsReady: true } o && PhoneNumbers.IsE164(o.BusinessNumber) ? o.BusinessNumber : null;
 
-    public string TemplateLanguage => options.Value.TemplateLanguage;
-
-    public bool IsSimulator => options.Value.IsSimulator;
+    public string TemplateLanguage => options.CurrentValue.TemplateLanguage;
+    public bool IsSimulator => options.CurrentValue.IsSimulator;
+    public string Provider => options.CurrentValue.Normalized;
+    public bool IsReady => options.CurrentValue.IsReady;
+    public IReadOnlyList<string> Missing => options.CurrentValue.Missing();
 }

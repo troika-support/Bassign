@@ -3,10 +3,10 @@ using Microsoft.Extensions.Options;
 
 namespace Bassign.Infrastructure.Identity;
 
-public sealed class RefreshTokenService(IRefreshTokenStore store, IOptions<AuthOptions> options, TimeProvider clock)
+/// <summary>Reads the lifetime per call (IOptionsMonitor), so an Admin's change applies to the next sign-in or refresh.</summary>
+public sealed class RefreshTokenService(IRefreshTokenStore store, IOptionsMonitor<AuthOptions> options, TimeProvider clock)
 {
-    private readonly AuthOptions _options = options.Value;
-    private int Days => _options.RefreshTokenDays <= 0 ? 30 : _options.RefreshTokenDays;
+    private int Days => options.CurrentValue.RefreshTokenDays is > 0 and var d ? d : 30;
 
     public async Task<string> IssueAsync(string userId, CancellationToken cancellationToken)
     {
